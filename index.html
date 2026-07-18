@@ -1,0 +1,1418 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>larpingnost</title>
+<style>
+:root{
+  --bg-deepest:#1a1b23;
+  --bg-rail:#1e1f28;
+  --bg-side:#24252f;
+  --bg-main:#2a2b36;
+  --bg-elevated:#32333f;
+  --bg-input:#3a3b48;
+  --bg-hover:#33343f;
+  --accent:#8b5cf6;
+  --accent-hover:#7c4ded;
+  --accent-soft:#8b5cf633;
+  --text-bright:#f3f2f7;
+  --text-normal:#d3d2db;
+  --text-muted:#95949e;
+  --text-faint:#6c6b76;
+  --green:#3ba55d;
+  --red:#ed4245;
+  --yellow:#e6a23c;
+  --danger:#ed4245;
+  --radius:10px;
+  --font: -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+}
+*{box-sizing:border-box; margin:0; padding:0;}
+html,body{height:100%;}
+body{
+  font-family:var(--font);
+  background:var(--bg-deepest);
+  color:var(--text-normal);
+  overflow:hidden;
+  font-size:15px;
+  -webkit-font-smoothing:antialiased;
+}
+button{font-family:inherit; cursor:pointer; border:none; outline:none; background:none; color:inherit;}
+input,textarea{font-family:inherit; outline:none; border:none; background:none; color:inherit;}
+::-webkit-scrollbar{width:8px; height:8px;}
+::-webkit-scrollbar-thumb{background:#000000aa; border-radius:4px;}
+::-webkit-scrollbar-track{background:transparent;}
+img{-webkit-user-drag:none;}
+
+#app{height:100vh; width:100vw; display:flex;}
+
+/* ---------- SETUP SCREEN ---------- */
+#setup-screen{
+  width:100%; height:100%; display:flex; align-items:center; justify-content:center;
+  background: radial-gradient(circle at 20% 20%, #33244f 0%, #1a1b23 55%);
+}
+.setup-card{
+  width:400px; max-width:92vw; background:var(--bg-main); border-radius:16px; padding:32px 28px;
+  box-shadow:0 20px 60px #00000066;
+}
+.setup-logo{
+  display:flex; align-items:center; gap:10px; margin-bottom:6px;
+}
+.setup-logo .mark{
+  width:38px; height:38px; border-radius:11px; background:linear-gradient(135deg,var(--accent),#5b2fc7);
+  display:flex; align-items:center; justify-content:center; font-weight:800; font-size:18px; color:#fff;
+}
+.setup-logo .word{font-weight:800; font-size:20px; color:var(--text-bright); letter-spacing:.2px;}
+.setup-card h1{font-size:21px; color:var(--text-bright); margin:18px 0 4px;}
+.setup-card p.sub{color:var(--text-muted); font-size:13.5px; margin-bottom:20px; line-height:1.5;}
+.field{margin-bottom:14px;}
+.field label{display:block; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.03em; color:var(--text-muted); margin-bottom:7px;}
+.field input{
+  width:100%; padding:10px 12px; background:var(--bg-input); border-radius:6px; color:var(--text-bright); font-size:14.5px;
+  border:1px solid transparent;
+}
+.field input:focus{border-color:var(--accent);}
+.field .hint{font-size:11.5px; color:var(--text-faint); margin-top:5px;}
+.field .err{font-size:12px; color:var(--red); margin-top:5px; display:none;}
+.avatar-pick{display:flex; gap:8px; flex-wrap:wrap; margin-bottom:6px;}
+.emoji-opt{
+  width:38px; height:38px; border-radius:50%; background:var(--bg-input); display:flex; align-items:center; justify-content:center;
+  font-size:19px; border:2px solid transparent;
+}
+.emoji-opt.sel{border-color:var(--accent);}
+.btn{
+  padding:11px 16px; border-radius:6px; font-weight:600; font-size:14px; text-align:center; display:inline-flex; align-items:center; justify-content:center; gap:6px;
+  transition:background .12s;
+}
+.btn-primary{background:var(--accent); color:#fff;}
+.btn-primary:hover{background:var(--accent-hover);}
+.btn-primary:disabled{opacity:.5; cursor:not-allowed;}
+.btn-ghost{background:var(--bg-input); color:var(--text-normal);}
+.btn-ghost:hover{background:var(--bg-hover);}
+.btn-danger{background:var(--red); color:#fff;}
+.btn-danger:hover{background:#c53537;}
+.btn-block{width:100%;}
+
+/* ---------- MAIN LAYOUT ---------- */
+#main-ui{display:none; width:100%; height:100%;}
+#main-ui.show{display:flex;}
+
+.server-rail{
+  width:72px; background:var(--bg-rail); display:flex; flex-direction:column; align-items:center;
+  padding:12px 0; gap:8px; overflow-y:auto; flex-shrink:0;
+}
+.rail-item{
+  width:48px; height:48px; border-radius:24px; background:var(--bg-elevated); color:var(--text-normal);
+  display:flex; align-items:center; justify-content:center; font-weight:700; font-size:16px; position:relative;
+  transition:border-radius .15s, background .15s; flex-shrink:0; overflow:hidden;
+}
+.rail-item img{width:100%;height:100%;object-fit:cover;}
+.rail-item:hover, .rail-item.active{border-radius:16px; background:var(--accent); color:#fff;}
+.rail-item.active::before{
+  content:""; position:absolute; left:-12px; width:4px; height:24px; background:#fff; border-radius:0 4px 4px 0;
+}
+.rail-sep{width:32px; height:2px; background:var(--bg-elevated); border-radius:2px; margin:2px 0;}
+.rail-add{background:var(--bg-elevated); color:var(--green); font-size:22px; font-weight:400;}
+.rail-add:hover{background:var(--green); color:#fff;}
+
+.sidebar{
+  width:242px; background:var(--bg-side); display:flex; flex-direction:column; flex-shrink:0;
+}
+.sidebar-header{
+  height:52px; display:flex; align-items:center; padding:0 16px; font-weight:700; color:var(--text-bright);
+  box-shadow:0 1px 0 #00000044; flex-shrink:0; justify-content:space-between; font-size:15px;
+}
+.sidebar-scroll{flex:1; overflow-y:auto; padding:8px;}
+.side-section-title{
+  font-size:11px; font-weight:700; text-transform:uppercase; color:var(--text-faint); padding:14px 8px 4px; letter-spacing:.03em;
+  display:flex; justify-content:space-between; align-items:center;
+}
+.side-section-title .add{font-size:16px; color:var(--text-faint);}
+.side-section-title .add:hover{color:var(--text-bright);}
+.side-item{
+  display:flex; align-items:center; gap:10px; padding:7px 8px; border-radius:6px; color:var(--text-muted); font-size:14.5px; margin-bottom:2px;
+  position:relative;
+}
+.side-item:hover{background:var(--bg-hover); color:var(--text-normal); cursor:pointer;}
+.side-item.active{background:var(--accent-soft); color:var(--text-bright);}
+.side-item .ico{width:20px; text-align:center; color:inherit; flex-shrink:0;}
+.side-item .name{flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+.side-item .dot{width:8px;height:8px;border-radius:50%; flex-shrink:0;}
+.side-item .badge{
+  background:var(--red); color:#fff; font-size:10.5px; font-weight:700; border-radius:9px; padding:1px 6px; flex-shrink:0;
+}
+.avatar{
+  width:32px; height:32px; border-radius:50%; background:var(--bg-elevated); display:flex; align-items:center; justify-content:center;
+  font-size:16px; flex-shrink:0; position:relative; overflow:hidden;
+}
+.avatar img{width:100%;height:100%; object-fit:cover;}
+.avatar.sm{width:22px;height:22px; font-size:12px;}
+.avatar.lg{width:80px;height:80px; font-size:34px;}
+.presence-dot{
+  position:absolute; right:-2px; bottom:-2px; width:11px; height:11px; border-radius:50%; border:2.5px solid var(--bg-side);
+  background:var(--text-faint);
+}
+.presence-dot.online{background:var(--green);}
+.presence-dot.voice{background:var(--accent);}
+
+.userbar{
+  height:54px; background:var(--bg-elevated); display:flex; align-items:center; padding:0 8px; gap:6px; flex-shrink:0;
+}
+.userbar .who{display:flex; align-items:center; gap:8px; flex:1; overflow:hidden; padding:4px; border-radius:6px;}
+.userbar .who:hover{background:var(--bg-hover); cursor:pointer;}
+.userbar .who .txt{overflow:hidden;}
+.userbar .who .n{font-size:13px; font-weight:600; color:var(--text-bright); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+.userbar .who .s{font-size:11px; color:var(--text-muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+.icon-btn{width:32px; height:32px; border-radius:6px; display:flex; align-items:center; justify-content:center; color:var(--text-muted); font-size:16px; flex-shrink:0;}
+.icon-btn:hover{background:var(--bg-hover); color:var(--text-bright);}
+.icon-btn.on{color:var(--accent);}
+.icon-btn.danger-on{color:var(--red);}
+
+.main-panel{flex:1; display:flex; flex-direction:column; background:var(--bg-main); min-width:0;}
+.main-header{
+  height:52px; display:flex; align-items:center; padding:0 16px; box-shadow:0 1px 0 #00000044; flex-shrink:0; gap:8px;
+}
+.main-header .ico{color:var(--text-faint); font-size:20px;}
+.main-header .title{font-weight:700; color:var(--text-bright); font-size:15.5px;}
+.main-header .sub{color:var(--text-muted); font-size:13px; margin-left:8px; padding-left:8px; border-left:1px solid var(--text-faint);}
+.main-header .spacer{flex:1;}
+
+.messages{flex:1; overflow-y:auto; padding:16px 16px 6px;}
+.msg-empty{
+  padding:40px 20px; color:var(--text-muted); text-align:center; display:flex; flex-direction:column; align-items:center; gap:8px;
+}
+.msg-empty .big{font-size:40px;}
+.msg-row{display:flex; gap:14px; padding:6px 8px; border-radius:6px; margin-bottom:2px;}
+.msg-row:hover{background:#0000001a;}
+.msg-row .avatar{margin-top:2px;}
+.msg-body{flex:1; min-width:0;}
+.msg-head{display:flex; align-items:baseline; gap:8px;}
+.msg-head .author{font-weight:600; color:var(--text-bright); font-size:14.5px;}
+.msg-head .time{font-size:11px; color:var(--text-faint);}
+.msg-text{color:var(--text-normal); font-size:14.5px; line-height:1.45; word-break:break-word; white-space:pre-wrap;}
+.msg-text img.emoji{width:22px; height:22px; vertical-align:middle; object-fit:contain;}
+.msg-sys{text-align:center; color:var(--text-faint); font-size:12.5px; padding:10px; font-style:italic;}
+
+.composer-wrap{padding:0 16px 16px; flex-shrink:0;}
+.composer{
+  background:var(--bg-input); border-radius:10px; display:flex; align-items:flex-end; padding:6px; gap:4px;
+}
+.composer textarea{
+  flex:1; resize:none; padding:9px 8px; color:var(--text-bright); font-size:14.5px; max-height:140px; line-height:1.4;
+}
+.composer textarea::placeholder{color:var(--text-faint);}
+.composer .icon-btn{margin-bottom:1px;}
+
+/* friends / dm list view */
+.friends-tabs{display:flex; align-items:center; gap:18px; padding:0 16px;}
+.friends-tabs .tab{color:var(--text-muted); font-size:14px; font-weight:600; padding:6px 4px; position:relative;}
+.friends-tabs .tab.active{color:var(--text-bright);}
+.friends-tabs .tab.active::after{content:""; position:absolute; left:0; right:0; bottom:-14px; height:2px; background:var(--text-bright);}
+.friends-body{flex:1; overflow-y:auto; padding:20px 16px;}
+.friend-row{display:flex; align-items:center; gap:12px; padding:10px 8px; border-radius:8px; border-top:1px solid #ffffff10;}
+.friend-row:hover{background:var(--bg-hover); cursor:pointer;}
+.friend-row .info{flex:1;}
+.friend-row .info .n{color:var(--text-bright); font-weight:600; font-size:14.5px;}
+.friend-row .info .s{color:var(--text-muted); font-size:12.5px;}
+.friend-row .actions{display:flex; gap:8px;}
+.pill-btn{padding:6px 10px; border-radius:6px; background:var(--bg-elevated); font-size:12.5px; font-weight:600; color:var(--text-normal);}
+.pill-btn:hover{background:var(--bg-hover);}
+.pill-btn.accept{background:var(--green); color:#fff;}
+.pill-btn.accept:hover{background:#2f8a4d;}
+.pill-btn.decline:hover{background:var(--red); color:#fff;}
+
+.addfriend-box{background:var(--bg-elevated); border-radius:10px; padding:16px; margin-bottom:20px;}
+.addfriend-box h3{color:var(--text-bright); font-size:15px; margin-bottom:4px;}
+.addfriend-box p{color:var(--text-muted); font-size:12.5px; margin-bottom:12px;}
+.addfriend-row{display:flex; gap:8px;}
+.addfriend-row input{flex:1; background:var(--bg-input); padding:9px 12px; border-radius:6px; color:var(--text-bright); font-size:14px;}
+
+/* voice channel view */
+.voice-view{flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:24px; padding:24px; overflow-y:auto;}
+.voice-grid{display:flex; flex-wrap:wrap; gap:14px; justify-content:center; align-items:center; width:100%;}
+.voice-tile{
+  width:200px; height:140px; background:var(--bg-elevated); border-radius:12px; display:flex; flex-direction:column;
+  align-items:center; justify-content:center; position:relative; overflow:hidden; gap:8px;
+}
+.voice-tile.speaking{outline:2.5px solid var(--green);}
+.voice-tile video{width:100%; height:100%; object-fit:cover; position:absolute; inset:0;}
+.voice-tile .name-tag{position:absolute; left:8px; bottom:8px; background:#000000aa; padding:2px 8px; border-radius:5px; font-size:12px; color:#fff; display:flex; align-items:center; gap:5px;}
+.voice-controls{display:flex; gap:12px;}
+.voice-controls .vc-btn{
+  width:52px; height:52px; border-radius:50%; background:var(--bg-elevated); display:flex; align-items:center; justify-content:center; font-size:19px; color:var(--text-normal);
+}
+.voice-controls .vc-btn:hover{background:var(--bg-hover);}
+.voice-controls .vc-btn.on{background:var(--accent); color:#fff;}
+.voice-controls .vc-btn.leave{background:var(--red); color:#fff;}
+.voice-controls .vc-btn.leave:hover{background:#c53537;}
+.voice-hint{color:var(--text-muted); font-size:13px; text-align:center; max-width:320px;}
+
+/* modal */
+.modal-overlay{
+  position:fixed; inset:0; background:#000000b3; display:flex; align-items:center; justify-content:center; z-index:100;
+}
+.modal{
+  background:var(--bg-main); border-radius:14px; width:440px; max-width:92vw; max-height:86vh; overflow-y:auto; box-shadow:0 20px 60px #00000066;
+}
+.modal-head{padding:20px 22px 6px; display:flex; justify-content:space-between; align-items:center;}
+.modal-head h2{font-size:19px; color:var(--text-bright);}
+.modal-head .close{font-size:20px; color:var(--text-faint);}
+.modal-head .close:hover{color:var(--text-bright);}
+.modal-body{padding:6px 22px 22px;}
+.modal-body p.desc{color:var(--text-muted); font-size:13px; margin-bottom:16px; line-height:1.5;}
+.modal-foot{padding:14px 22px 22px; display:flex; justify-content:flex-end; gap:8px;}
+.invite-box{background:var(--bg-input); border-radius:8px; padding:12px 14px; display:flex; align-items:center; gap:10px; margin-top:8px;}
+.invite-box code{flex:1; color:var(--accent); font-weight:700; letter-spacing:1px; font-size:15px;}
+.toggle-row{display:flex; align-items:center; justify-content:space-between; padding:10px 0;}
+.emoji-shelf{display:flex; flex-wrap:wrap; gap:8px; max-height:150px; overflow-y:auto; padding:10px; background:var(--bg-input); border-radius:8px;}
+.emoji-shelf .em{width:32px; height:32px; display:flex; align-items:center; justify-content:center; border-radius:6px; font-size:18px;}
+.emoji-shelf .em:hover{background:var(--bg-hover);}
+.emoji-shelf .em img{width:22px; height:22px; object-fit:contain;}
+.custom-emoji-row{display:flex; align-items:center; gap:10px; padding:6px 4px;}
+.custom-emoji-row img{width:24px;height:24px; object-fit:contain;}
+.custom-emoji-row .cn{flex:1; font-size:13px; color:var(--text-normal);}
+
+.toast-wrap{position:fixed; right:18px; bottom:18px; display:flex; flex-direction:column; gap:8px; z-index:200;}
+.toast{background:var(--bg-elevated); color:var(--text-bright); padding:11px 16px; border-radius:8px; font-size:13.5px; box-shadow:0 8px 24px #00000066; border-left:3px solid var(--accent); max-width:320px;}
+.toast.err{border-left-color:var(--red);}
+.toast.ok{border-left-color:var(--green);}
+
+.tooltip-label{font-size:10px; text-transform:uppercase; letter-spacing:.03em; color:var(--text-faint); font-weight:700; margin:2px 0 6px;}
+
+@media (max-width: 760px){
+  .sidebar{position:absolute; left:72px; top:0; bottom:0; z-index:20; transform:translateX(0); box-shadow:6px 0 20px #00000066;}
+}
+</style>
+</head>
+<body>
+
+<div id="app">
+
+  <div id="setup-screen">
+    <div class="setup-card">
+      <div class="setup-logo">
+        <div class="mark">L</div>
+        <div class="word">larpingnost</div>
+      </div>
+      <h1>Создать профиль</h1>
+      <p class="sub">Свой мессенджер для своих. Имя ниже — уникальный логин, по которому друзья смогут тебя найти и добавить.</p>
+
+      <div class="field">
+        <label>Логин (уникальный)</label>
+        <input id="su-username" maxlength="20" placeholder="например vanya_gm">
+        <div class="err" id="su-username-err">Этот логин уже занят</div>
+      </div>
+      <div class="field">
+        <label>Отображаемое имя</label>
+        <input id="su-nick" maxlength="26" placeholder="Как тебя видят друзья">
+      </div>
+      <div class="field">
+        <label>Аватар</label>
+        <div class="avatar-pick" id="su-avatars"></div>
+        <div class="hint">Позже можно загрузить своё изображение в настройках.</div>
+      </div>
+      <button class="btn btn-primary btn-block" id="su-submit">Войти в larpingnost</button>
+    </div>
+  </div>
+
+  <div id="main-ui">
+    <div class="server-rail" id="server-rail"></div>
+    <div class="sidebar" id="sidebar"></div>
+    <div class="main-panel" id="main-panel"></div>
+  </div>
+
+</div>
+
+<div id="modal-root"></div>
+<div class="toast-wrap" id="toast-wrap"></div>
+
+<script>
+(function(){
+"use strict";
+
+/* ================= UTIL ================= */
+const $ = sel => document.querySelector(sel);
+const $$ = (sel, root) => Array.from((root||document).querySelectorAll(sel));
+const uid = () => (crypto.randomUUID ? crypto.randomUUID() : 'id-'+Date.now()+'-'+Math.random().toString(36).slice(2));
+const now = () => Date.now();
+const esc = s => (s==null?'':String(s)).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function code6(){ return Math.random().toString(36).slice(2,8).toUpperCase(); }
+function timeStr(ts){
+  const d = new Date(ts);
+  const h = d.getHours().toString().padStart(2,'0');
+  const m = d.getMinutes().toString().padStart(2,'0');
+  return h+':'+m;
+}
+function toast(msg, type){
+  const wrap = $('#toast-wrap');
+  const el = document.createElement('div');
+  el.className = 'toast' + (type?(' '+type):'');
+  el.textContent = msg;
+  wrap.appendChild(el);
+  setTimeout(()=>{ el.style.opacity='0'; el.style.transition='opacity .3s'; setTimeout(()=>el.remove(),300); }, 3800);
+}
+const EMOJI_SET = ['😀','😂','😎','😍','🤔','😢','😡','🎉','🔥','👍','👎','❤️','💀','👀','🙌','🤝','🥳','😴','🤯','🫡','✨','💯','🎮','🍕'];
+
+async function sget(key, shared){
+  try{ const r = await window.storage.get(key, !!shared); return r ? JSON.parse(r.value) : null; }
+  catch(e){ return null; }
+}
+async function sset(key, value, shared){
+  try{ return await window.storage.set(key, JSON.stringify(value), !!shared); }
+  catch(e){ console.error('storage set failed', key, e); return null; }
+}
+
+function resizeImageFile(file, maxDim){
+  return new Promise((resolve,reject)=>{
+    const reader = new FileReader();
+    reader.onload = () => {
+      const img = new Image();
+      img.onload = () => {
+        let w = img.width, h = img.height;
+        if (w > h){ if (w > maxDim){ h = Math.round(h*maxDim/w); w = maxDim; } }
+        else { if (h > maxDim){ w = Math.round(w*maxDim/h); h = maxDim; } }
+        const canvas = document.createElement('canvas');
+        canvas.width = w; canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, w, h);
+        resolve(canvas.toDataURL('image/jpeg', 0.82));
+      };
+      img.onerror = reject;
+      img.src = reader.result;
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+/* ================= STATE ================= */
+const State = {
+  me: null,            // {id, username, nickname, avatar:{type,value}, status}
+  servers: [],          // list of server objects I'm in
+  friends: [],          // list of profile objects
+  requests: [],         // incoming pending requests (profile objects)
+  view: {type:'friends', tab:'online'}, // friends | dm | server
+  peerCache: {},         // userId -> profile (cache)
+  presenceCache: {},     // userId -> ts
+  timers: {},
+  voice: null,           // active voice session object or null
+};
+
+function avatarHTML(avatar, size){
+  size = size || '';
+  const cls = 'avatar' + (size?(' '+size):'');
+  if (avatar && avatar.type === 'image' && avatar.value){
+    return `<div class="${cls}"><img src="${avatar.value}" alt=""></div>`;
+  }
+  const emoji = (avatar && avatar.value) || '🙂';
+  return `<div class="${cls}">${emoji}</div>`;
+}
+
+async function getProfile(userId){
+  if (State.peerCache[userId]) return State.peerCache[userId];
+  const p = await sget('user:'+userId, true);
+  if (p) State.peerCache[userId] = p;
+  return p;
+}
+async function isOnline(userId){
+  const ts = await sget('presence:'+userId, true);
+  return !!(ts && (now() - ts) < 45000);
+}
+
+/* ================= SETUP FLOW ================= */
+let suSelectedAvatar = '😀';
+function initSetupScreen(){
+  const wrap = $('#su-avatars');
+  wrap.innerHTML = EMOJI_SET.slice(0,10).map(e => `<button class="emoji-opt${e===suSelectedAvatar?' sel':''}" data-e="${e}">${e}</button>`).join('');
+  wrap.addEventListener('click', e=>{
+    const b = e.target.closest('.emoji-opt'); if(!b) return;
+    suSelectedAvatar = b.dataset.e;
+    $$('.emoji-opt', wrap).forEach(x=>x.classList.toggle('sel', x===b));
+  });
+  $('#su-submit').addEventListener('click', submitSetup);
+}
+async function submitSetup(){
+  const username = $('#su-username').value.trim();
+  const nick = $('#su-nick').value.trim();
+  const errEl = $('#su-username-err');
+  errEl.style.display = 'none';
+  if (!/^[a-zA-Z0-9_]{3,20}$/.test(username)){
+    errEl.textContent = 'Логин: 3–20 символов, латиница/цифры/подчёркивание';
+    errEl.style.display = 'block';
+    return;
+  }
+  const btn = $('#su-submit'); btn.disabled = true; btn.textContent = 'Проверяем логин…';
+  const key = 'username:' + username.toLowerCase();
+  const existing = await sget(key, true);
+  if (existing){
+    errEl.textContent = 'Этот логин уже занят';
+    errEl.style.display = 'block';
+    btn.disabled = false; btn.textContent = 'Войти в larpingnost';
+    return;
+  }
+  const id = uid();
+  await sset(key, id, true);
+  const profile = {
+    id, username,
+    nickname: nick || username,
+    avatar: {type:'emoji', value: suSelectedAvatar},
+    status: '', createdAt: now()
+  };
+  await sset('user:'+id, profile, true);
+  await sset('presence:'+id, now(), true);
+  await sset('account', {id, username}, false);
+  State.me = profile;
+  enterApp();
+}
+
+/* ================= APP BOOT ================= */
+async function boot(){
+  initSetupScreen();
+  let acc = null;
+  try{ acc = await sget('account', false); }catch(e){ acc = null; }
+  if (acc && acc.id){
+    let profile = await sget('user:'+acc.id, true);
+    if (!profile){
+      profile = {id:acc.id, username:acc.username, nickname:acc.username, avatar:{type:'emoji',value:'🙂'}, status:''};
+      await sset('user:'+acc.id, profile, true);
+    }
+    State.me = profile;
+    await sset('presence:'+acc.id, now(), true);
+    enterApp();
+  }
+  handleUrlParams();
+}
+
+function handleUrlParams(){
+  try{
+    const p = new URLSearchParams(location.search);
+    State.pendingInvite = p.get('server') || null;
+    State.pendingAddFriend = p.get('add') || null;
+  }catch(e){}
+}
+
+async function enterApp(){
+  $('#setup-screen').style.display = 'none';
+  $('#main-ui').classList.add('show');
+  await refreshMyServers();
+  await refreshFriendsAndRequests();
+  renderRail();
+  renderSidebar();
+  renderMain();
+  setInterval(heartbeat, 20000);
+  setInterval(pollView, 2000);
+  heartbeat();
+
+  if (State.pendingInvite){ openJoinServerModal(State.pendingInvite); State.pendingInvite=null; }
+  if (State.pendingAddFriend){ setView({type:'friends', tab:'add'}); setTimeout(()=>{ const i=$('#af-input'); if(i) i.value = State.pendingAddFriend; }, 50); State.pendingAddFriend=null; }
+}
+
+async function heartbeat(){
+  if (!State.me) return;
+  await sset('presence:'+State.me.id, now(), true);
+}
+
+async function pollView(){
+  if (!State.me) return;
+  await refreshFriendsAndRequests(true);
+  renderSidebar();
+  if (State.view.type === 'dm' || State.view.type === 'server'){
+    await refreshMessages(true);
+  }
+  if (State.view.type === 'friends'){
+    renderMain();
+  }
+  if (State.voice){
+    refreshVoiceParticipants();
+  }
+}
+
+/* ================= FRIENDS / REQUESTS ================= */
+async function refreshFriendsAndRequests(silent){
+  const myFriends = await sget('friends:'+State.me.id, true) || [];
+  const myReq = await sget('requests:'+State.me.id, true) || [];
+  const friendProfiles = [];
+  for (const fid of myFriends){ const p = await getProfile(fid); if (p) friendProfiles.push(p); }
+  const reqProfiles = [];
+  for (const r of myReq){ const p = await getProfile(r.from); if (p) reqProfiles.push(p); }
+  State.friends = friendProfiles;
+  State.requests = reqProfiles;
+}
+
+async function sendFriendRequest(username){
+  username = (username||'').trim();
+  if (!username) return;
+  const targetId = await sget('username:'+username.toLowerCase(), true);
+  if (!targetId){ toast('Пользователь «'+username+'» не найден. Он должен хотя бы раз открыть larpingnost.', 'err'); return; }
+  if (targetId === State.me.id){ toast('Это твой собственный логин 🙂', 'err'); return; }
+  const myFriends = await sget('friends:'+State.me.id, true) || [];
+  if (myFriends.includes(targetId)){ toast('Вы уже друзья', 'err'); return; }
+  const theirReq = await sget('requests:'+targetId, true) || [];
+  if (theirReq.some(r=>r.from===State.me.id)){ toast('Заявка уже отправлена', 'ok'); return; }
+  theirReq.push({from: State.me.id, at: now()});
+  await sset('requests:'+targetId, theirReq, true);
+  toast('Заявка в друзья отправлена', 'ok');
+}
+
+async function acceptRequest(fromId){
+  const myReq = await sget('requests:'+State.me.id, true) || [];
+  await sset('requests:'+State.me.id, myReq.filter(r=>r.from!==fromId), true);
+  const myFriends = await sget('friends:'+State.me.id, true) || [];
+  if (!myFriends.includes(fromId)){ myFriends.push(fromId); await sset('friends:'+State.me.id, myFriends, true); }
+  const theirFriends = await sget('friends:'+fromId, true) || [];
+  if (!theirFriends.includes(State.me.id)){ theirFriends.push(State.me.id); await sset('friends:'+fromId, theirFriends, true); }
+  await refreshFriendsAndRequests();
+  renderSidebar(); renderMain();
+  toast('Теперь вы друзья', 'ok');
+}
+async function declineRequest(fromId){
+  const myReq = await sget('requests:'+State.me.id, true) || [];
+  await sset('requests:'+State.me.id, myReq.filter(r=>r.from!==fromId), true);
+  await refreshFriendsAndRequests();
+  renderSidebar(); renderMain();
+}
+
+/* ================= SERVERS ================= */
+async function refreshMyServers(){
+  const ids = await sget('serverIndex:'+State.me.id, true) || [];
+  const list = [];
+  for (const id of ids){ const s = await sget('server:'+id, true); if (s) list.push(s); }
+  State.servers = list;
+}
+async function createServer(name){
+  name = (name||'').trim() || 'Мой сервер';
+  const id = uid();
+  const server = {
+    id, name, icon: name.trim().slice(0,2).toUpperCase(),
+    ownerId: State.me.id,
+    invite: code6(),
+    channels: [ {id:uid(), name:'общий', type:'text'}, {id:uid(), name:'Голосовой', type:'voice'} ],
+    members: [State.me.id],
+    customEmojis: [],
+    createdAt: now()
+  };
+  await sset('server:'+id, server, true);
+  await sset('invite:'+server.invite, id, true);
+  const idx = await sget('serverIndex:'+State.me.id, true) || [];
+  idx.push(id);
+  await sset('serverIndex:'+State.me.id, idx, true);
+  await refreshMyServers();
+  renderRail();
+  setView({type:'server', serverId:id, channelId:server.channels[0].id});
+  toast('Сервер «'+name+'» создан', 'ok');
+}
+async function joinServerByInvite(codeRaw){
+  const code = (codeRaw||'').trim().toUpperCase();
+  if (!code) return;
+  const sid = await sget('invite:'+code, true);
+  if (!sid){ toast('Неверный код приглашения', 'err'); return; }
+  const server = await sget('server:'+sid, true);
+  if (!server){ toast('Сервер не найден', 'err'); return; }
+  if (!server.members.includes(State.me.id)){
+    server.members.push(State.me.id);
+    await sset('server:'+sid, server, true);
+    const idx = await sget('serverIndex:'+State.me.id, true) || [];
+    if (!idx.includes(sid)){ idx.push(sid); await sset('serverIndex:'+State.me.id, idx, true); }
+  }
+  await refreshMyServers();
+  renderRail();
+  setView({type:'server', serverId: sid, channelId: server.channels[0] ? server.channels[0].id : null});
+  toast('Вы присоединились к серверу «'+server.name+'»', 'ok');
+}
+async function createChannel(serverId, name, type){
+  const server = await sget('server:'+serverId, true);
+  if (!server) return;
+  const ch = {id: uid(), name: (name||'канал').trim().toLowerCase().replace(/\s+/g,'-'), type};
+  server.channels.push(ch);
+  await sset('server:'+serverId, server, true);
+  await refreshMyServers();
+  renderSidebar();
+  toast('Канал создан', 'ok');
+}
+function currentServer(){
+  if (State.view.type !== 'server') return null;
+  return State.servers.find(s=>s.id===State.view.serverId) || null;
+}
+
+/* ================= MESSAGES (DM + channel) ================= */
+function pairKey(a,b){ return [a,b].sort().join('_'); }
+function msgKeyForView(){
+  if (State.view.type === 'dm') return 'dm:' + pairKey(State.me.id, State.view.peerId);
+  if (State.view.type === 'server') return 'msgs:' + State.view.serverId + ':' + State.view.channelId;
+  return null;
+}
+let lastRenderedCount = -1;
+async function refreshMessages(silentIfSame){
+  const key = msgKeyForView();
+  if (!key) return;
+  const list = await sget(key, true) || [];
+  if (silentIfSame && list.length === lastRenderedCount) return;
+  lastRenderedCount = list.length;
+  renderMessages(list);
+}
+async function sendMessage(text){
+  text = (text||'').trim();
+  if (!text) return;
+  const key = msgKeyForView();
+  if (!key) return;
+  const list = await sget(key, true) || [];
+  list.push({from: State.me.id, text, at: now()});
+  const trimmed = list.slice(-250);
+  await sset(key, trimmed, true);
+  lastRenderedCount = trimmed.length;
+  renderMessages(trimmed);
+}
+
+function renderEmojiInText(text, customEmojis){
+  let out = esc(text);
+  if (customEmojis && customEmojis.length){
+    for (const em of customEmojis){
+      const re = new RegExp(':'+em.name.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+':', 'g');
+      out = out.replace(re, `<img class="emoji" src="${em.url}" alt=":${esc(em.name)}:">`);
+    }
+  }
+  return out;
+}
+
+async function renderMessages(list){
+  const box = $('#messages-box');
+  if (!box) return;
+  if (!list.length){
+    box.innerHTML = `<div class="msg-empty"><div class="big">👋</div><div>Пока нет сообщений. Начните разговор!</div></div>`;
+    return;
+  }
+  const server = currentServer();
+  const customEmojis = server ? server.customEmojis : [];
+  const atBottom = (box.scrollTop + box.clientHeight) >= (box.scrollHeight - 60);
+  let html = '';
+  let lastAuthor = null, lastTime = 0;
+  for (const m of list){
+    const prof = await getProfile(m.from) || {nickname:'???', avatar:{type:'emoji',value:'❓'}};
+    const grouped = (lastAuthor === m.from) && (m.at - lastTime < 5*60*1000);
+    if (grouped){
+      html += `<div class="msg-row" style="padding-left:8px;">
+        <div style="width:32px;flex-shrink:0;text-align:right;"></div>
+        <div class="msg-body"><div class="msg-text">${renderEmojiInText(m.text, customEmojis)}</div></div>
+      </div>`;
+    } else {
+      html += `<div class="msg-row">
+        ${avatarHTML(prof.avatar)}
+        <div class="msg-body">
+          <div class="msg-head"><span class="author">${esc(prof.nickname)}</span><span class="time">${timeStr(m.at)}</span></div>
+          <div class="msg-text">${renderEmojiInText(m.text, customEmojis)}</div>
+        </div>
+      </div>`;
+    }
+    lastAuthor = m.from; lastTime = m.at;
+  }
+  box.innerHTML = html;
+  if (atBottom) box.scrollTop = box.scrollHeight;
+}
+
+/* ================= VIEW ROUTING ================= */
+async function setView(view){
+  await leaveVoiceIfChannelChanged(view);
+  State.view = view;
+  lastRenderedCount = -1;
+  renderRail();
+  renderSidebar();
+  renderMain();
+  if (view.type === 'dm' || view.type === 'server'){
+    const ch = currentChannelType();
+    if (ch !== 'voice') await refreshMessages(false);
+  }
+}
+function currentChannelType(){
+  if (State.view.type !== 'server') return null;
+  const server = currentServer();
+  if (!server) return null;
+  const ch = server.channels.find(c=>c.id===State.view.channelId);
+  return ch ? ch.type : null;
+}
+async function leaveVoiceIfChannelChanged(newView){
+  if (!State.voice) return;
+  const stillSame = newView.type==='voiceroom' || (State.voice.autoView && newView.type===State.voice.autoView.type && newView.serverId===State.voice.autoView.serverId && newView.channelId===State.voice.autoView.channelId);
+  // keep voice running in background regardless of nav; nothing to do here
+}
+
+/* ================= RENDER: RAIL ================= */
+function renderRail(){
+  const rail = $('#server-rail');
+  let html = '';
+  const dmActive = State.view.type==='friends' || State.view.type==='dm';
+  html += `<div class="rail-item ${dmActive?'active':''}" title="Личные сообщения" onclick="App.goHome()">💬</div>`;
+  html += `<div class="rail-sep"></div>`;
+  for (const s of State.servers){
+    const active = State.view.type==='server' && State.view.serverId===s.id;
+    html += `<div class="rail-item ${active?'active':''}" title="${esc(s.name)}" onclick="App.openServer('${s.id}')">${esc(s.icon||s.name.slice(0,2).toUpperCase())}</div>`;
+  }
+  html += `<div class="rail-item rail-add" title="Добавить сервер" onclick="App.openAddServerModal()">+</div>`;
+  rail.innerHTML = html;
+}
+
+/* ================= RENDER: SIDEBAR ================= */
+function renderSidebar(){
+  const el = $('#sidebar');
+  if (State.view.type === 'friends' || State.view.type === 'dm'){
+    el.innerHTML = sidebarDMHtml();
+  } else if (State.view.type === 'server'){
+    el.innerHTML = sidebarServerHtml();
+  }
+  el.innerHTML += userbarHtml();
+  bindSidebarEvents();
+}
+function sidebarDMHtml(){
+  const reqCount = State.requests.length;
+  let items = `<div class="side-item" data-act="friends" style="font-weight:700;"><span class="ico">🧑‍🤝‍🧑</span><span class="name">Друзья</span>${reqCount?`<span class="badge">${reqCount}</span>`:''}</div>`;
+  for (const f of State.friends){
+    const active = State.view.type==='dm' && State.view.peerId===f.id;
+    items += `<div class="side-item ${active?'active':''}" data-act="dm" data-id="${f.id}">
+      ${avatarHTML(f.avatar,'sm')}<span class="name">${esc(f.nickname)}</span>
+    </div>`;
+  }
+  return `
+    <div class="sidebar-header">Личные сообщения</div>
+    <div class="sidebar-scroll">
+      ${items}
+      <div class="side-section-title">Личные сообщения</div>
+      ${State.friends.length===0 ? '<div style="padding:10px 8px;color:var(--text-faint);font-size:12.5px;">Пока нет друзей — добавьте по логину во вкладке «Друзья».</div>' : ''}
+    </div>`;
+}
+function sidebarServerHtml(){
+  const server = currentServer();
+  if (!server) return '';
+  const textChannels = server.channels.filter(c=>c.type==='text');
+  const voiceChannels = server.channels.filter(c=>c.type==='voice');
+  let html = `<div class="sidebar-header">${esc(server.name)} <span class="icon-btn" style="width:auto;padding:0 4px;" onclick="App.openServerInviteModal('${server.id}')">👥+</span></div><div class="sidebar-scroll">`;
+  html += `<div class="side-section-title"><span>Текстовые каналы</span><span class="add" onclick="App.openCreateChannelModal('${server.id}','text')">+</span></div>`;
+  for (const c of textChannels){
+    const active = State.view.channelId===c.id;
+    html += `<div class="side-item ${active?'active':''}" data-act="channel" data-server="${server.id}" data-ch="${c.id}"><span class="ico">#</span><span class="name">${esc(c.name)}</span></div>`;
+  }
+  html += `<div class="side-section-title"><span>Голосовые каналы</span><span class="add" onclick="App.openCreateChannelModal('${server.id}','voice')">+</span></div>`;
+  for (const c of voiceChannels){
+    const active = State.view.channelId===c.id;
+    const inThis = State.voice && State.voice.channelKey === (server.id+':'+c.id);
+    html += `<div class="side-item ${active?'active':''}" data-act="channel" data-server="${server.id}" data-ch="${c.id}"><span class="ico">🔊</span><span class="name">${esc(c.name)}</span>${inThis?'<span class="dot" style="background:var(--green)"></span>':''}</div>`;
+  }
+  html += `</div>`;
+  return html;
+}
+function userbarHtml(){
+  const me = State.me;
+  const micOn = State.voice ? !State.voice.muted : true;
+  const inVoice = !!State.voice;
+  return `<div class="userbar">
+    <div class="who" onclick="App.openSettingsModal()">
+      ${avatarHTML(me.avatar)}
+      <div class="txt"><div class="n">${esc(me.nickname)}</div><div class="s">@${esc(me.username)}</div></div>
+    </div>
+    ${inVoice ? `<div class="icon-btn ${micOn?'':'danger-on'}" title="${micOn?'Выключить микрофон':'Включить микрофон'}" onclick="App.toggleMic()">${micOn?'🎤':'🔇'}</div>` : ''}
+    <div class="icon-btn" title="Настройки профиля" onclick="App.openSettingsModal()">⚙️</div>
+  </div>`;
+}
+function bindSidebarEvents(){
+  const el = $('#sidebar');
+  el.querySelectorAll('.side-item[data-act="dm"]').forEach(n=>{
+    n.addEventListener('click', ()=> setView({type:'dm', peerId:n.dataset.id}));
+  });
+  const friendsHeader = el.querySelector('.side-item[data-act="friends"]');
+  if (friendsHeader) friendsHeader.addEventListener('click', ()=> setView({type:'friends', tab:'online'}));
+  el.querySelectorAll('.side-item[data-act="channel"]').forEach(n=>{
+    n.addEventListener('click', ()=> setView({type:'server', serverId:n.dataset.server, channelId:n.dataset.ch}));
+  });
+}
+
+/* ================= RENDER: MAIN PANEL ================= */
+function renderMain(){
+  const el = $('#main-panel');
+  if (State.view.type === 'friends'){
+    el.innerHTML = friendsMainHtml();
+    bindFriendsEvents();
+    return;
+  }
+  if (State.view.type === 'dm'){
+    const peer = State.friends.find(f=>f.id===State.view.peerId) || State.peerCache[State.view.peerId];
+    el.innerHTML = chatMainHtml({title: peer? peer.nickname : '...', sub: peer? ('@'+peer.username) : '', icon: '@', isDM:true, peer});
+    bindComposerEvents();
+    refreshMessages(false);
+    return;
+  }
+  if (State.view.type === 'server'){
+    const server = currentServer();
+    if (!server){ el.innerHTML = ''; return; }
+    const ch = server.channels.find(c=>c.id===State.view.channelId);
+    if (!ch){ el.innerHTML = '<div class="voice-hint" style="margin:auto;">Выберите канал слева</div>'; return; }
+    if (ch.type === 'voice'){
+      el.innerHTML = voiceMainHtml(server, ch);
+      bindVoiceEvents(server, ch);
+    } else {
+      el.innerHTML = chatMainHtml({title:'#'+ch.name, sub: server.name, icon:'#', server});
+      bindComposerEvents();
+      refreshMessages(false);
+    }
+  }
+}
+
+function friendsMainHtml(){
+  const reqCount = State.requests.length;
+  const tab = State.view.tab || 'online';
+  let list = State.friends;
+  const rows = list.map(f => `
+    <div class="friend-row" data-open="${f.id}">
+      ${avatarHTML(f.avatar)}
+      <div class="info"><div class="n">${esc(f.nickname)}</div><div class="s">@${esc(f.username)}</div></div>
+      <div class="actions"><span class="pill-btn" data-msg="${f.id}">Написать</span></div>
+    </div>`).join('') || `<div style="color:var(--text-faint);padding:20px 8px;">Список друзей пуст.</div>`;
+
+  const reqRows = State.requests.map(r => `
+    <div class="friend-row">
+      ${avatarHTML(r.avatar)}
+      <div class="info"><div class="n">${esc(r.nickname)}</div><div class="s">@${esc(r.username)} · хочет добавить в друзья</div></div>
+      <div class="actions">
+        <span class="pill-btn accept" data-accept="${r.id}">Принять</span>
+        <span class="pill-btn decline" data-decline="${r.id}">Отклонить</span>
+      </div>
+    </div>`).join('') || `<div style="color:var(--text-faint);padding:14px 8px;">Нет входящих заявок.</div>`;
+
+  return `
+    <div class="main-header">
+      <span class="ico">🧑‍🤝‍🧑</span><span class="title">Друзья</span>
+      <div class="friends-tabs" style="margin-left:16px;">
+        <div class="tab ${tab==='online'?'active':''}" data-tab="online">Все друзья</div>
+        <div class="tab ${tab==='add'?'active':''}" data-tab="add">Добавить в друзья</div>
+        <div class="tab ${tab==='requests'?'active':''}" data-tab="requests">Заявки${reqCount?` (${reqCount})`:''}</div>
+      </div>
+    </div>
+    <div class="friends-body">
+      ${tab==='add' ? `
+        <div class="addfriend-box">
+          <h3>Добавить друга</h3>
+          <p>Введи точный логин friend'а. Он должен хотя бы раз открыть larpingnost, чтобы его нашли.</p>
+          <div class="addfriend-row">
+            <input id="af-input" placeholder="логин, например vanya_gm">
+            <button class="btn btn-primary" id="af-send">Отправить заявку</button>
+          </div>
+        </div>
+        <div class="addfriend-box">
+          <h3>Твоя ссылка-приглашение</h3>
+          <p>Отправь другу эту ссылку — она откроет форму добавления тебя в друзья.</p>
+          <div class="invite-box"><code id="my-invite-link">${esc(location.origin+location.pathname)}?add=${esc(State.me.username)}</code><button class="pill-btn" id="copy-my-link">Копировать</button></div>
+          <p style="margin-top:10px;">Или просто скажи другу свой логин: <b style="color:var(--text-bright)">@${esc(State.me.username)}</b></p>
+        </div>
+      ` : ''}
+      ${tab==='requests' ? reqRows : ''}
+      ${tab==='online' ? rows : ''}
+    </div>`;
+}
+function bindFriendsEvents(){
+  const el = $('#main-panel');
+  el.querySelectorAll('.tab').forEach(t=> t.addEventListener('click', ()=> setView({type:'friends', tab:t.dataset.tab})));
+  el.querySelectorAll('[data-accept]').forEach(b=> b.addEventListener('click', ()=> acceptRequest(b.dataset.accept)));
+  el.querySelectorAll('[data-decline]').forEach(b=> b.addEventListener('click', ()=> declineRequest(b.dataset.decline)));
+  el.querySelectorAll('[data-msg]').forEach(b=> b.addEventListener('click', ()=> setView({type:'dm', peerId:b.dataset.msg})));
+  el.querySelectorAll('[data-open]').forEach(row=> row.addEventListener('click', (e)=>{ if(e.target.closest('.pill-btn')) return; setView({type:'dm', peerId: row.dataset.open}); }));
+  const sendBtn = $('#af-send');
+  if (sendBtn) sendBtn.addEventListener('click', async ()=>{ const v = $('#af-input').value; await sendFriendRequest(v); $('#af-input').value=''; });
+  const copyBtn = $('#copy-my-link');
+  if (copyBtn) copyBtn.addEventListener('click', ()=>{
+    const text = $('#my-invite-link').textContent;
+    navigator.clipboard && navigator.clipboard.writeText(text).then(()=>toast('Ссылка скопирована','ok')).catch(()=>toast('Не удалось скопировать',"err"));
+  });
+}
+
+function chatMainHtml(opts){
+  const callBtn = opts.isDM ? `<div class="icon-btn" title="Позвонить" onclick="App.startDMCall('${opts.peer?opts.peer.id:''}')">📞</div>` : '';
+  const emojiBtn = opts.server ? `<div class="icon-btn" title="Эмодзи сервера" onclick="App.openEmojiManageModal('${opts.server.id}')">😊+</div>` : '';
+  return `
+    <div class="main-header">
+      <span class="ico">${opts.icon}</span><span class="title">${esc(opts.title)}</span>
+      ${opts.sub?`<span class="sub">${esc(opts.sub)}</span>`:''}
+      <div class="spacer"></div>
+      ${callBtn}${emojiBtn}
+    </div>
+    <div class="messages" id="messages-box"></div>
+    <div class="composer-wrap">
+      <div class="composer">
+        <div class="icon-btn" title="Эмодзи" id="emoji-open">😊</div>
+        <textarea id="composer-input" rows="1" placeholder="Написать сообщение…"></textarea>
+        <div class="icon-btn" title="Отправить" id="composer-send">➤</div>
+      </div>
+    </div>`;
+}
+function bindComposerEvents(){
+  const input = $('#composer-input');
+  const send = $('#composer-send');
+  if (!input) return;
+  const doSend = ()=>{ const v = input.value; input.value=''; input.style.height='auto'; sendMessage(v); };
+  send.addEventListener('click', doSend);
+  input.addEventListener('keydown', e=>{
+    if (e.key==='Enter' && !e.shiftKey){ e.preventDefault(); doSend(); }
+  });
+  input.addEventListener('input', ()=>{ input.style.height='auto'; input.style.height = Math.min(140, input.scrollHeight)+'px'; });
+  input.focus();
+  const emojiBtn = $('#emoji-open');
+  if (emojiBtn) emojiBtn.addEventListener('click', ()=> openQuickEmojiPicker(input));
+}
+async function openQuickEmojiPicker(input){
+  const server = currentServer();
+  const custom = server ? server.customEmojis : [];
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;inset:0;z-index:150;';
+  overlay.innerHTML = `<div style="position:absolute; bottom:90px; left:50%; transform:translateX(-50%); background:var(--bg-elevated); border-radius:10px; padding:10px; box-shadow:0 10px 30px #000000aa;">
+    <div class="emoji-shelf">
+      ${EMOJI_SET.map(e=>`<div class="em" data-ins="${e}">${e}</div>`).join('')}
+      ${custom.map(c=>`<div class="em" data-ins=":${esc(c.name)}:"><img src="${c.url}" alt=""></div>`).join('')}
+    </div>
+  </div>`;
+  overlay.addEventListener('click', e=>{
+    const em = e.target.closest('.em');
+    if (em){ input.value += em.dataset.ins; input.focus(); }
+    overlay.remove();
+  });
+  document.body.appendChild(overlay);
+}
+
+/* ================= VOICE / CALLS (WebRTC) ================= */
+const ICE_SERVERS = [{urls:'stun:stun.l.google.com:19302'}, {urls:'stun:stun1.l.google.com:19302'}];
+
+function voiceMainHtml(server, channel){
+  const key = server.id+':'+channel.id;
+  const active = State.voice && State.voice.channelKey === key;
+  return `
+    <div class="main-header"><span class="ico">🔊</span><span class="title">${esc(channel.name)}</span></div>
+    <div class="voice-view">
+      <div class="voice-grid" id="voice-grid">
+        ${active ? '' : '<div class="voice-hint">Голосовой канал. Нажмите «Присоединиться», чтобы начать разговор — без TURN-сервера соединение работает по прямому P2P (STUN), в большинстве домашних сетей ок, но в строгих корпоративных/мобильных сетях звонок иногда может не установиться.</div>'}
+      </div>
+      <div class="voice-controls">
+        ${active ? `
+          <div class="vc-btn ${State.voice.muted?'':'on'}" title="Микрофон" id="vc-mic">${State.voice.muted?'🔇':'🎤'}</div>
+          <div class="vc-btn ${State.voice.sharing?'on':''}" title="Демонстрация экрана" id="vc-share">🖥️</div>
+          <div class="vc-btn leave" title="Выйти" id="vc-leave">📴</div>
+        ` : `<button class="btn btn-primary" id="vc-join">Присоединиться к разговору</button>`}
+      </div>
+    </div>`;
+}
+function bindVoiceEvents(server, channel){
+  const key = server.id+':'+channel.id;
+  const join = $('#vc-join');
+  if (join) join.addEventListener('click', ()=> joinVoice(key, {type:'server', serverId:server.id, channelId:channel.id}));
+  const mic = $('#vc-mic'); if (mic) mic.addEventListener('click', toggleMic);
+  const share = $('#vc-share'); if (share) share.addEventListener('click', toggleScreenShare);
+  const leave = $('#vc-leave'); if (leave) leave.addEventListener('click', leaveVoice);
+  if (State.voice && State.voice.channelKey === key) renderVoiceGrid();
+}
+
+async function startDMCall(peerId){
+  if (!peerId) return;
+  const key = 'dmcall:' + pairKey(State.me.id, peerId);
+  await joinVoice(key, {type:'dm', peerId});
+  renderCallOverlay(peerId, key);
+}
+function renderCallOverlay(peerId, key){
+  const peer = State.friends.find(f=>f.id===peerId) || {nickname:'Собеседник', avatar:{type:'emoji',value:'🙂'}};
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.id = 'call-overlay';
+  overlay.innerHTML = `<div class="modal" style="width:420px;">
+    <div class="modal-head"><h2>Звонок · ${esc(peer.nickname)}</h2></div>
+    <div class="modal-body">
+      <div class="voice-grid" id="voice-grid" style="justify-content:center;"></div>
+      <div class="voice-controls" style="justify-content:center; margin-top:18px;">
+        <div class="vc-btn on" id="vc-mic" title="Микрофон">🎤</div>
+        <div class="vc-btn" id="vc-share" title="Демонстрация экрана">🖥️</div>
+        <div class="vc-btn leave" id="vc-leave" title="Завершить">📴</div>
+      </div>
+    </div>
+  </div>`;
+  document.body.appendChild(overlay);
+  overlay.querySelector('#vc-mic').addEventListener('click', toggleMic);
+  overlay.querySelector('#vc-share').addEventListener('click', toggleScreenShare);
+  overlay.querySelector('#vc-leave').addEventListener('click', ()=>{ leaveVoice(); overlay.remove(); });
+  renderVoiceGrid();
+}
+
+async function joinVoice(channelKey, autoView){
+  if (State.voice && State.voice.channelKey === channelKey) return;
+  if (State.voice) await leaveVoice();
+  let localStream;
+  try{
+    localStream = await navigator.mediaDevices.getUserMedia({audio:true});
+  }catch(e){
+    toast('Не удалось получить доступ к микрофону: ' + e.message, 'err');
+    return;
+  }
+  State.voice = {
+    channelKey, localStream, screenStream:null, muted:false, sharing:false,
+    peers: {}, processedSignals:{}, autoView,
+    presenceTimer:null, signalTimer:null
+  };
+  const presence = await sget('voice:'+channelKey, true) || {};
+  presence[State.me.id] = {at: now(), muted:false, sharing:false, nickname: State.me.nickname};
+  await sset('voice:'+channelKey, presence, true);
+
+  Object.keys(presence).forEach(pid=>{
+    if (pid !== State.me.id && (now() - presence[pid].at) < 20000){
+      connectToPeer(pid, State.me.id < pid);
+    }
+  });
+
+  State.voice.presenceTimer = setInterval(async ()=>{
+    if (!State.voice) return;
+    const pres = await sget('voice:'+State.voice.channelKey, true) || {};
+    pres[State.me.id] = {at: now(), muted: State.voice.muted, sharing: State.voice.sharing, nickname: State.me.nickname};
+    await sset('voice:'+State.voice.channelKey, pres, true);
+  }, 5000);
+  State.voice.signalTimer = setInterval(pollSignals, 1200);
+  refreshVoiceParticipants();
+  renderMain();
+}
+
+async function refreshVoiceParticipants(){
+  if (!State.voice) return;
+  const pres = await sget('voice:'+State.voice.channelKey, true) || {};
+  const activeIds = Object.keys(pres).filter(id => (now()-pres[id].at) < 20000);
+  for (const pid of activeIds){
+    if (pid !== State.me.id && !State.voice.peers[pid]){
+      connectToPeer(pid, State.me.id < pid);
+    }
+  }
+  for (const pid of Object.keys(State.voice.peers)){
+    if (!activeIds.includes(pid)){
+      closePeer(pid);
+    }
+  }
+  renderVoiceGrid(pres);
+}
+
+function connectToPeer(peerId, initiator){
+  if (!State.voice || State.voice.peers[peerId]) return;
+  const pc = new RTCPeerConnection({iceServers: ICE_SERVERS});
+  const entry = {pc, streams:{}, negotiating:false};
+  State.voice.peers[peerId] = entry;
+  State.voice.localStream.getTracks().forEach(t => pc.addTrack(t, State.voice.localStream));
+  if (State.voice.screenStream){
+    State.voice.screenStream.getTracks().forEach(t => pc.addTrack(t, State.voice.screenStream));
+  }
+  pc.onicecandidate = e => { if (e.candidate) sendSignal(peerId, {type:'candidate', data:e.candidate}); };
+  pc.ontrack = e => {
+    entry.streams[e.track.kind + (e.track.label||'')] = e.streams[0];
+    entry.remoteStream = e.streams[0];
+    entry.hasVideo = e.track.kind === 'video' || entry.hasVideo;
+    renderVoiceGrid();
+  };
+  pc.onconnectionstatechange = ()=>{
+    if (['failed','disconnected','closed'].includes(pc.connectionState)){
+      // leave cleanup handled by presence loop
+    }
+  };
+  pc.onnegotiationneeded = async ()=>{
+    if (entry.negotiating) return;
+    entry.negotiating = true;
+    try{
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+      sendSignal(peerId, {type:'offer', data:{type:offer.type, sdp:offer.sdp}});
+    }catch(err){ console.error(err); }
+    finally{ entry.negotiating = false; }
+  };
+}
+function closePeer(peerId){
+  if (!State.voice) return;
+  const entry = State.voice.peers[peerId];
+  if (entry){ try{ entry.pc.close(); }catch(e){} delete State.voice.peers[peerId]; }
+}
+
+async function sendSignal(toId, msg){
+  const key = 'sig:'+State.voice.channelKey+':'+toId;
+  const inbox = await sget(key, true) || [];
+  msg.from = State.me.id; msg.id = uid();
+  inbox.push(msg);
+  await sset(key, inbox.slice(-40), true);
+}
+async function pollSignals(){
+  if (!State.voice) return;
+  const key = 'sig:'+State.voice.channelKey+':'+State.me.id;
+  const inbox = await sget(key, true) || [];
+  if (!inbox.length) return;
+  const unseen = inbox.filter(m => !State.voice.processedSignals[m.id]);
+  if (!unseen.length){ return; }
+  // single consumer (us) reads then clears its own inbox
+  await sset(key, [], true);
+  for (const m of unseen){
+    State.voice.processedSignals[m.id] = true;
+    try{
+      if (m.type === 'offer'){
+        if (!State.voice.peers[m.from]) connectToPeer(m.from, false);
+        const entry = State.voice.peers[m.from];
+        await entry.pc.setRemoteDescription(new RTCSessionDescription(m.data));
+        const answer = await entry.pc.createAnswer();
+        await entry.pc.setLocalDescription(answer);
+        sendSignal(m.from, {type:'answer', data:{type:answer.type, sdp:answer.sdp}});
+      } else if (m.type === 'answer'){
+        const entry = State.voice.peers[m.from];
+        if (entry) await entry.pc.setRemoteDescription(new RTCSessionDescription(m.data));
+      } else if (m.type === 'candidate'){
+        const entry = State.voice.peers[m.from];
+        if (entry){ try{ await entry.pc.addIceCandidate(new RTCIceCandidate(m.data)); }catch(e){} }
+      }
+    }catch(err){ console.error('signal handling error', err); }
+  }
+}
+
+function renderVoiceGrid(pres){
+  const grid = document.getElementById('voice-grid');
+  if (!grid || !State.voice) return;
+  let html = '';
+  html += voiceTileHTML(State.me, true, State.voice.muted, null, State.voice.screenStream);
+  for (const pid of Object.keys(State.voice.peers)){
+    const entry = State.voice.peers[pid];
+    const prof = State.peerCache[pid] || {nickname:'…', avatar:{type:'emoji',value:'🙂'}};
+    html += voiceTileHTML(prof, false, false, entry.remoteStream, null);
+  }
+  grid.innerHTML = html;
+  // attach media streams to newly created media elements
+  document.querySelectorAll('#voice-grid video[data-stream="local-screen"]').forEach(v=>{ if (State.voice.screenStream) v.srcObject = State.voice.screenStream; });
+  Object.keys(State.voice.peers).forEach(pid=>{
+    const entry = State.voice.peers[pid];
+    const v = document.querySelector('#voice-grid video[data-peer="'+pid+'"]');
+    const a = document.querySelector('#voice-grid audio[data-peer="'+pid+'"]');
+    if (entry.remoteStream){
+      if (v) v.srcObject = entry.remoteStream;
+      if (a) a.srcObject = entry.remoteStream;
+    }
+  });
+  Object.keys(State.peerCache).length; // noop
+  Object.keys(State.voice.peers).forEach(pid=>{ if (!State.peerCache[pid]) getProfile(pid).then(()=>renderVoiceGrid()); });
+}
+function voiceTileHTML(prof, isMe, muted, remoteStream, localScreenStream){
+  const av = avatarHTML(prof.avatar, 'lg');
+  const hasVideo = remoteStream && remoteStream.getVideoTracks && remoteStream.getVideoTracks().length;
+  let media = '';
+  if (isMe && localScreenStream){
+    media = `<video data-stream="local-screen" autoplay muted playsinline></video>`;
+  } else if (!isMe && hasVideo){
+    media = `<video data-peer="__PID__" autoplay playsinline></video><audio data-peer="__PID__" autoplay></audio>`;
+  } else if (!isMe && remoteStream){
+    media = `<audio data-peer="__PID__" autoplay></audio>`;
+  }
+  return `<div class="voice-tile">
+    ${media || av}
+    <div class="name-tag">${muted?'🔇':'🎤'} ${esc(prof.nickname)}${isMe?' (вы)':''}</div>
+  </div>`.replace(/__PID__/g, prof.id||'');
+}
+
+async function toggleMic(){
+  if (!State.voice) return;
+  State.voice.muted = !State.voice.muted;
+  State.voice.localStream.getAudioTracks().forEach(t => t.enabled = !State.voice.muted);
+  renderMain(); renderVoiceGrid();
+  const overlay = document.getElementById('call-overlay');
+  if (overlay){ const b = overlay.querySelector('#vc-mic'); if(b){ b.textContent = State.voice.muted?'🔇':'🎤'; b.classList.toggle('on', !State.voice.muted); } }
+}
+async function toggleScreenShare(){
+  if (!State.voice) return;
+  if (!State.voice.sharing){
+    let stream;
+    try{ stream = await navigator.mediaDevices.getDisplayMedia({video:true}); }
+    catch(e){ toast('Демонстрация экрана отменена или недоступна', 'err'); return; }
+    State.voice.screenStream = stream;
+    State.voice.sharing = true;
+    Object.values(State.voice.peers).forEach(entry=>{
+      stream.getTracks().forEach(t => entry.pc.addTrack(t, stream));
+    });
+    stream.getVideoTracks()[0].addEventListener('ended', ()=> stopScreenShare());
+  } else {
+    stopScreenShare();
+  }
+  renderMain(); renderVoiceGrid();
+}
+function stopScreenShare(){
+  if (!State.voice || !State.voice.screenStream) return;
+  const tracks = State.voice.screenStream.getTracks();
+  Object.values(State.voice.peers).forEach(entry=>{
+    entry.pc.getSenders().forEach(s=>{
+      if (s.track && tracks.includes(s.track)) entry.pc.removeTrack(s);
+    });
+  });
+  tracks.forEach(t=>t.stop());
+  State.voice.screenStream = null;
+  State.voice.sharing = false;
+  renderMain(); renderVoiceGrid();
+}
+async function leaveVoice(){
+  if (!State.voice) return;
+  const v = State.voice;
+  clearInterval(v.presenceTimer);
+  clearInterval(v.signalTimer);
+  Object.keys(v.peers).forEach(closePeer);
+  v.localStream.getTracks().forEach(t=>t.stop());
+  if (v.screenStream) v.screenStream.getTracks().forEach(t=>t.stop());
+  const pres = await sget('voice:'+v.channelKey, true) || {};
+  delete pres[State.me.id];
+  await sset('voice:'+v.channelKey, pres, true);
+  State.voice = null;
+  const overlay = document.getElementById('call-overlay');
+  if (overlay) overlay.remove();
+  renderMain();
+}
+
+/* ================= MODALS ================= */
+function closeModal(){ $('#modal-root').innerHTML = ''; }
+function openModal(html){ $('#modal-root').innerHTML = `<div class="modal-overlay" id="mo">${html}</div>`; $('#mo').addEventListener('click', e=>{ if(e.target.id==='mo') closeModal(); }); }
+
+function openAddServerModal(){
+  openModal(`
+    <div class="modal" style="width:420px;">
+      <div class="modal-head"><h2>Сервера</h2><span class="close" onclick="App.closeModal()">✕</span></div>
+      <div class="modal-body">
+        <p class="desc">Создай свой сервер или присоединись по коду приглашения от друга.</p>
+        <div class="field"><label>Создать сервер</label><input id="ms-create-name" placeholder="Название сервера"></div>
+        <button class="btn btn-primary btn-block" id="ms-create-btn">Создать сервер</button>
+        <div style="height:18px;"></div>
+        <div class="field"><label>Присоединиться по коду</label><input id="ms-join-code" placeholder="Например A1B2C3" maxlength="6" style="text-transform:uppercase;"></div>
+        <button class="btn btn-ghost btn-block" id="ms-join-btn">Присоединиться</button>
+      </div>
+    </div>`);
+  $('#ms-create-btn').addEventListener('click', async ()=>{ const n=$('#ms-create-name').value; closeModal(); await createServer(n); });
+  $('#ms-join-btn').addEventListener('click', async ()=>{ const c=$('#ms-join-code').value; closeModal(); await joinServerByInvite(c); });
+}
+function openJoinServerModal(prefillCode){
+  openAddServerModal();
+  setTimeout(()=>{ const i = $('#ms-join-code'); if (i && prefillCode) i.value = prefillCode; }, 30);
+}
+function openServerInviteModal(serverId){
+  const server = State.servers.find(s=>s.id===serverId);
+  if (!server) return;
+  openModal(`
+    <div class="modal" style="width:420px;">
+      <div class="modal-head"><h2>Пригласить друзей</h2><span class="close" onclick="App.closeModal()">✕</span></div>
+      <div class="modal-body">
+        <p class="desc">Отправь этот код друзьям — они смогут присоединиться к «${esc(server.name)}» через кнопку «+» на панели серверов.</p>
+        <div class="invite-box"><code>${server.invite}</code><button class="pill-btn" id="copy-invite">Копировать</button></div>
+        <p class="desc" style="margin-top:14px;">Либо перешли им прямую ссылку:</p>
+        <div class="invite-box"><code style="font-size:12px;">${esc(location.origin+location.pathname)}?server=${server.invite}</code><button class="pill-btn" id="copy-invite-link">Копировать</button></div>
+      </div>
+    </div>`);
+  $('#copy-invite').addEventListener('click', ()=>{ navigator.clipboard.writeText(server.invite).then(()=>toast('Код скопирован','ok')); });
+  $('#copy-invite-link').addEventListener('click', ()=>{ navigator.clipboard.writeText(location.origin+location.pathname+'?server='+server.invite).then(()=>toast('Ссылка скопирована','ok')); });
+}
+function openCreateChannelModal(serverId, type){
+  openModal(`
+    <div class="modal" style="width:400px;">
+      <div class="modal-head"><h2>Создать ${type==='voice'?'голосовой':'текстовый'} канал</h2><span class="close" onclick="App.closeModal()">✕</span></div>
+      <div class="modal-body">
+        <div class="field"><label>Название канала</label><input id="cc-name" placeholder="${type==='voice'?'общение':'болталка'}"></div>
+      </div>
+      <div class="modal-foot"><button class="btn btn-ghost" onclick="App.closeModal()">Отмена</button><button class="btn btn-primary" id="cc-submit">Создать</button></div>
+    </div>`);
+  $('#cc-submit').addEventListener('click', async ()=>{ const n=$('#cc-name').value; closeModal(); await createChannel(serverId, n, type); });
+}
+function openSettingsModal(){
+  const me = State.me;
+  openModal(`
+    <div class="modal" style="width:440px;">
+      <div class="modal-head"><h2>Настройки профиля</h2><span class="close" onclick="App.closeModal()">✕</span></div>
+      <div class="modal-body">
+        <div style="display:flex; align-items:center; gap:16px; margin-bottom:18px;">
+          ${avatarHTML(me.avatar,'lg')}
+          <div>
+            <label class="pill-btn" style="cursor:pointer;">Загрузить фото<input type="file" id="av-upload" accept="image/*" style="display:none;"></label>
+          </div>
+        </div>
+        <div class="tooltip-label">Или выбрать эмодзи-аватар</div>
+        <div class="avatar-pick" id="set-avatars" style="margin-bottom:16px;">
+          ${EMOJI_SET.map(e=>`<button class="emoji-opt${(me.avatar.type==='emoji'&&me.avatar.value===e)?' sel':''}" data-e="${e}">${e}</button>`).join('')}
+        </div>
+        <div class="field"><label>Отображаемое имя</label><input id="set-nick" value="${esc(me.nickname)}" maxlength="26"></div>
+        <div class="field"><label>Статус (необязательно)</label><input id="set-status" value="${esc(me.status||'')}" maxlength="60" placeholder="Например: играю в что-то"></div>
+        <div class="field"><label>Твой логин (нельзя изменить)</label><input value="@${esc(me.username)}" disabled style="opacity:.6;"></div>
+      </div>
+      <div class="modal-foot"><button class="btn btn-ghost" onclick="App.closeModal()">Отмена</button><button class="btn btn-primary" id="set-save">Сохранить</button></div>
+    </div>`);
+  let newAvatar = me.avatar;
+  $('#set-avatars').addEventListener('click', e=>{
+    const b = e.target.closest('.emoji-opt'); if(!b) return;
+    newAvatar = {type:'emoji', value:b.dataset.e};
+    $$('.emoji-opt', $('#set-avatars')).forEach(x=>x.classList.toggle('sel', x===b));
+  });
+  $('#av-upload').addEventListener('change', async e=>{
+    const file = e.target.files[0]; if (!file) return;
+    try{
+      const dataUrl = await resizeImageFile(file, 160);
+      newAvatar = {type:'image', value: dataUrl};
+      toast('Фото загружено, нажмите «Сохранить»', 'ok');
+    }catch(err){ toast('Не удалось загрузить изображение', 'err'); }
+  });
+  $('#set-save').addEventListener('click', async ()=>{
+    me.nickname = $('#set-nick').value.trim() || me.username;
+    me.status = $('#set-status').value.trim();
+    me.avatar = newAvatar;
+    await sset('user:'+me.id, me, true);
+    State.peerCache[me.id] = me;
+    closeModal();
+    renderSidebar(); renderMain(); renderRail();
+    toast('Профиль обновлён', 'ok');
+  });
+}
+function openEmojiManageModal(serverId){
+  const server = State.servers.find(s=>s.id===serverId);
+  if (!server) return;
+  openModal(`
+    <div class="modal" style="width:440px;">
+      <div class="modal-head"><h2>Эмодзи сервера</h2><span class="close" onclick="App.closeModal()">✕</span></div>
+      <div class="modal-body">
+        <p class="desc">Загрузи картинку — она станет кастомным эмодзи, доступным в чатах этого сервера как :название:.</p>
+        <div class="addfriend-row" style="margin-bottom:14px;">
+          <input id="em-name" placeholder="название (без пробелов)" maxlength="20">
+          <label class="pill-btn" style="cursor:pointer;">Файл<input type="file" id="em-file" accept="image/*" style="display:none;"></label>
+        </div>
+        <div id="em-list"></div>
+      </div>
+      <div class="modal-foot"><button class="btn btn-ghost" onclick="App.closeModal()">Готово</button></div>
+    </div>`);
+  function renderList(){
+    $('#em-list').innerHTML = (server.customEmojis||[]).map((c,i)=>`
+      <div class="custom-emoji-row"><img src="${c.url}"><span class="cn">:${esc(c.name)}:</span><span class="pill-btn" data-del="${i}">Удалить</span></div>
+    `).join('') || '<div style="color:var(--text-faint); font-size:12.5px;">Пока нет кастомных эмодзи.</div>';
+    $('#em-list').querySelectorAll('[data-del]').forEach(b=>{
+      b.addEventListener('click', async ()=>{
+        server.customEmojis.splice(Number(b.dataset.del),1);
+        await sset('server:'+server.id, server, true);
+        renderList();
+      });
+    });
+  }
+  renderList();
+  $('#em-file').addEventListener('change', async e=>{
+    const file = e.target.files[0]; if (!file) return;
+    const nameInput = $('#em-name');
+    let name = nameInput.value.trim().replace(/[^a-zA-Z0-9_а-яА-Я]/g,'');
+    if (!name){ toast('Введите название эмодзи', 'err'); return; }
+    try{
+      const dataUrl = await resizeImageFile(file, 64);
+      server.customEmojis = server.customEmojis || [];
+      server.customEmojis.push({name, url:dataUrl});
+      await sset('server:'+server.id, server, true);
+      nameInput.value=''; e.target.value='';
+      renderList();
+      toast('Эмодзи добавлен', 'ok');
+    }catch(err){ toast('Не удалось загрузить изображение', 'err'); }
+  });
+}
+
+/* ================= PUBLIC API for inline handlers ================= */
+window.App = {
+  goHome: ()=> setView({type:'friends', tab:'online'}),
+  openServer: (id)=>{ const s = State.servers.find(x=>x.id===id); if(!s) return; setView({type:'server', serverId:id, channelId: s.channels[0]?s.channels[0].id:null}); },
+  openAddServerModal, openJoinServerModal, openServerInviteModal, openCreateChannelModal,
+  openSettingsModal, openEmojiManageModal, closeModal,
+  toggleMic, toggleScreenShare, leaveVoice, startDMCall
+};
+
+boot();
+})();
+</script>
+</body>
+</html>
