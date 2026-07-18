@@ -4,6 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>larpingnost</title>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-database-compat.js"></script>
 <style>
 :root{
   --bg-deepest:#1a1b23;
@@ -353,16 +355,63 @@ function toast(msg, type){
 }
 const EMOJI_SET = ['😀','😂','😎','😍','🤔','😢','😡','🎉','🔥','👍','👎','❤️','💀','👀','🙌','🤝','🥳','😴','🤯','🫡','✨','💯','🎮','🍕'];
 
-async function sget(key, shared){
-  try{ const r = await window.storage.get(key, !!shared); return r ? JSON.parse(r.value) : null; }
+/* ================= FIREBASE BACKEND =================
+   Чтобы мессенджер реально работал между разными людьми/устройствами,
+   сюда нужно вставить конфиг своего бесплатного проекта Firebase:
+   1. Зайди на https://console.firebase.google.com → Add project (бесплатно).
+   2. В проекте: Build → Realtime Database → Create Database → режим "Test mode"
+      (это делает базу открытой на чтение/запись без логина — подходит для
+      приватного мессенджера среди друзей, но помни: технически любой, кто
+      узнает эти ключи, сможет читать/писать в базу).
+   3. Project settings (шестерёнка) → General → в блоке "Your apps" нажми
+      значок "</>" (Web app), зарегистрируй приложение — тебе покажут
+      объект firebaseConfig. Скопируй его сюда вместо значений ниже.
+============================================================ */
+const firebaseConfig = {
+  apiKey: "AIzaSyCEK9eRTSLCfdlE6GzsRY6FIyXRcEkOKhA",
+  authDomain: "larpingcord-b98a4.firebaseapp.com",
+  databaseURL: "https://larpingcord-b98a4-default-rtdb.firebaseio.com",
+  projectId: "larpingcord-b98a4",
+  storageBucket: "larpingcord-b98a4.firebasestorage.app",
+  messagingSenderId: "485812879605",
+  appId: "1:485812879605:web:7e055fdfc9a194599205bc",
+  measurementId: "G-5Y5P47DWR0"
+};
+const FIREBASE_CONFIGURED = firebaseConfig.apiKey && firebaseConfig.apiKey !== "ВСТАВЬ_СЮДА" && !!firebaseConfig.databaseURL;
+let db = null;
+if (FIREBASE_CONFIGURED){
+  try{
+    firebase.initializeApp(firebaseConfig);
+    db = firebase.database();
+  }catch(e){ console.error('firebase init failed', e); }
+}
+
+async function sget(key){
+  if (!db) return null;
+  try{
+    const snap = await db.ref(key).once('value');
+    const v = snap.val();
+    return v ? JSON.parse(v) : null;
+  }catch(e){ console.error('db get failed', key, e); return null; }
+}
+async function sset(key, value){
+  if (!db) return null;
+  try{ await db.ref(key).set(JSON.stringify(value)); return true; }
+  catch(e){ console.error('db set failed', key, e); return null; }
+}
+
+/* Личность привязана к браузеру/устройству (localStorage), а не к Firebase —
+   так у каждого человека, открывшего сайт, будет свой профиль. */
+function getAccountLocal(){
+  try{ const raw = localStorage.getItem('larpingnost_account'); return raw ? JSON.parse(raw) : null; }
   catch(e){ return null; }
 }
-async function sset(key, value, shared){
-  try{ return await window.storage.set(key, JSON.stringify(value), !!shared); }
-  catch(e){ console.error('storage set failed', key, e); return null; }
+function setAccountLocal(acc){
+  try{ localStorage.setItem('larpingnost_account', JSON.stringify(acc)); }catch(e){}
 }
 
 function resizeImageFile(file, maxDim){
+
   return new Promise((resolve,reject)=>{
     const reader = new FileReader();
     reader.onload = () => {
@@ -460,16 +509,37 @@ async function submitSetup(){
   };
   await sset('user:'+id, profile, true);
   await sset('presence:'+id, now(), true);
-  await sset('account', {id, username}, false);
+  setAccountLocal({id, username});
   State.me = profile;
   enterApp();
 }
 
 /* ================= APP BOOT ================= */
+function showFirebaseSetupScreen(){
+  $('#setup-screen').innerHTML = `
+    <div class="setup-card" style="width:480px;">
+      <div class="setup-logo"><div class="mark">L</div><div class="word">larpingnost</div></div>
+      <h1>Нужно подключить бесплатную базу данных</h1>
+      <p class="sub">Чтобы друзья могли реально писать друг другу, ищу друзей и заходить на сервера, мессенджеру нужен общий бэкенд. Это бесплатный проект Firebase — займёт 3–5 минут.</p>
+      <ol style="color:var(--text-normal); font-size:13.5px; line-height:1.7; padding-left:18px; margin-bottom:16px;">
+        <li>Зайди на <b>console.firebase.google.com</b> → «Add project» (бесплатно).</li>
+        <li>В проекте: <b>Build → Realtime Database → Create Database</b> → выбери режим <b>Test mode</b>.</li>
+        <li>Шестерёнка (Project settings) → General → внизу «Your apps» → значок <b>&lt;/&gt;</b> (Web) → зарегистрируй приложение — появится объект <code>firebaseConfig</code>.</li>
+        <li>Открой этот HTML-файл в текстовом редакторе, найди в коде <code>const firebaseConfig = {…}</code> и вставь туда свои значения вместо «ВСТАВЬ_СЮДА».</li>
+        <li>Сохрани файл и обнови страницу.</li>
+      </ol>
+      <p class="sub" style="margin-bottom:0;">Пока конфиг не вставлен, приложение не может стартовать — не пугайся, это не баг, это ожидаемый экран настройки.</p>
+    </div>`;
+}
+
 async function boot(){
+  if (!FIREBASE_CONFIGURED){
+    showFirebaseSetupScreen();
+    return;
+  }
   initSetupScreen();
   let acc = null;
-  try{ acc = await sget('account', false); }catch(e){ acc = null; }
+  try{ acc = getAccountLocal(); }catch(e){ acc = null; }
   if (acc && acc.id){
     let profile = await sget('user:'+acc.id, true);
     if (!profile){
@@ -516,9 +586,6 @@ async function pollView(){
   if (!State.me) return;
   await refreshFriendsAndRequests(true);
   renderSidebar();
-  if (State.view.type === 'dm' || State.view.type === 'server'){
-    await refreshMessages(true);
-  }
   if (State.view.type === 'friends'){
     renderMain();
   }
@@ -642,10 +709,26 @@ function msgKeyForView(){
   return null;
 }
 let lastRenderedCount = -1;
+let msgListenerRef = null;
+function detachMessageListener(){
+  if (msgListenerRef){ try{ msgListenerRef.off('value'); }catch(e){} msgListenerRef = null; }
+}
+function attachMessageListener(){
+  detachMessageListener();
+  const key = msgKeyForView();
+  if (!key || !db) return;
+  msgListenerRef = db.ref(key);
+  msgListenerRef.on('value', snap => {
+    const raw = snap.val();
+    const list = raw ? JSON.parse(raw) : [];
+    lastRenderedCount = list.length;
+    renderMessages(list);
+  });
+}
 async function refreshMessages(silentIfSame){
   const key = msgKeyForView();
   if (!key) return;
-  const list = await sget(key, true) || [];
+  const list = await sget(key) || [];
   if (silentIfSame && list.length === lastRenderedCount) return;
   lastRenderedCount = list.length;
   renderMessages(list);
@@ -655,12 +738,10 @@ async function sendMessage(text){
   if (!text) return;
   const key = msgKeyForView();
   if (!key) return;
-  const list = await sget(key, true) || [];
+  const list = await sget(key) || [];
   list.push({from: State.me.id, text, at: now()});
   const trimmed = list.slice(-250);
-  await sset(key, trimmed, true);
-  lastRenderedCount = trimmed.length;
-  renderMessages(trimmed);
+  await sset(key, trimmed);
 }
 
 function renderEmojiInText(text, customEmojis){
@@ -719,7 +800,9 @@ async function setView(view){
   renderMain();
   if (view.type === 'dm' || view.type === 'server'){
     const ch = currentChannelType();
-    if (ch !== 'voice') await refreshMessages(false);
+    if (ch !== 'voice') attachMessageListener(); else detachMessageListener();
+  } else {
+    detachMessageListener();
   }
 }
 function currentChannelType(){
@@ -835,7 +918,7 @@ function renderMain(){
     const peer = State.friends.find(f=>f.id===State.view.peerId) || State.peerCache[State.view.peerId];
     el.innerHTML = chatMainHtml({title: peer? peer.nickname : '...', sub: peer? ('@'+peer.username) : '', icon: '@', isDM:true, peer});
     bindComposerEvents();
-    refreshMessages(false);
+    attachMessageListener();
     return;
   }
   if (State.view.type === 'server'){
@@ -849,7 +932,7 @@ function renderMain(){
     } else {
       el.innerHTML = chatMainHtml({title:'#'+ch.name, sub: server.name, icon:'#', server});
       bindComposerEvents();
-      refreshMessages(false);
+      attachMessageListener();
     }
   }
 }
@@ -1033,6 +1116,12 @@ function renderCallOverlay(peerId, key){
   renderVoiceGrid();
 }
 
+async function voicePresenceGetAll(channelKey){
+  if (!db) return {};
+  try{ const snap = await db.ref('voicePresence/'+channelKey).once('value'); return snap.val() || {}; }
+  catch(e){ console.error('voice presence read failed', e); return {}; }
+}
+
 async function joinVoice(channelKey, autoView){
   if (State.voice && State.voice.channelKey === channelKey) return;
   if (State.voice) await leaveVoice();
@@ -1045,13 +1134,14 @@ async function joinVoice(channelKey, autoView){
   }
   State.voice = {
     channelKey, localStream, screenStream:null, muted:false, sharing:false,
-    peers: {}, processedSignals:{}, autoView,
+    peers: {}, autoView,
     presenceTimer:null, signalTimer:null
   };
-  const presence = await sget('voice:'+channelKey, true) || {};
-  presence[State.me.id] = {at: now(), muted:false, sharing:false, nickname: State.me.nickname};
-  await sset('voice:'+channelKey, presence, true);
+  const myPresenceRef = db.ref('voicePresence/'+channelKey+'/'+State.me.id);
+  await myPresenceRef.set({at: now(), muted:false, sharing:false, nickname: State.me.nickname});
+  myPresenceRef.onDisconnect().remove(); // авточистка, если вкладка закроется/сеть оборвётся
 
+  const presence = await voicePresenceGetAll(channelKey);
   Object.keys(presence).forEach(pid=>{
     if (pid !== State.me.id && (now() - presence[pid].at) < 20000){
       connectToPeer(pid, State.me.id < pid);
@@ -1060,18 +1150,16 @@ async function joinVoice(channelKey, autoView){
 
   State.voice.presenceTimer = setInterval(async ()=>{
     if (!State.voice) return;
-    const pres = await sget('voice:'+State.voice.channelKey, true) || {};
-    pres[State.me.id] = {at: now(), muted: State.voice.muted, sharing: State.voice.sharing, nickname: State.me.nickname};
-    await sset('voice:'+State.voice.channelKey, pres, true);
+    await myPresenceRef.update({at: now(), muted: State.voice.muted, sharing: State.voice.sharing});
   }, 5000);
-  State.voice.signalTimer = setInterval(pollSignals, 1200);
+  State.voice.signalTimer = setInterval(pollSignals, 1000);
   refreshVoiceParticipants();
   renderMain();
 }
 
 async function refreshVoiceParticipants(){
   if (!State.voice) return;
-  const pres = await sget('voice:'+State.voice.channelKey, true) || {};
+  const pres = await voicePresenceGetAll(State.voice.channelKey);
   const activeIds = Object.keys(pres).filter(id => (now()-pres[id].at) < 20000);
   for (const pid of activeIds){
     if (pid !== State.me.id && !State.voice.peers[pid]){
@@ -1125,23 +1213,21 @@ function closePeer(peerId){
 }
 
 async function sendSignal(toId, msg){
-  const key = 'sig:'+State.voice.channelKey+':'+toId;
-  const inbox = await sget(key, true) || [];
-  msg.from = State.me.id; msg.id = uid();
-  inbox.push(msg);
-  await sset(key, inbox.slice(-40), true);
+  if (!db) return;
+  msg.from = State.me.id;
+  try{ await db.ref('signals/'+State.voice.channelKey+'/'+toId).push(msg); }
+  catch(e){ console.error('sendSignal failed', e); }
 }
 async function pollSignals(){
-  if (!State.voice) return;
-  const key = 'sig:'+State.voice.channelKey+':'+State.me.id;
-  const inbox = await sget(key, true) || [];
-  if (!inbox.length) return;
-  const unseen = inbox.filter(m => !State.voice.processedSignals[m.id]);
-  if (!unseen.length){ return; }
-  // single consumer (us) reads then clears its own inbox
-  await sset(key, [], true);
-  for (const m of unseen){
-    State.voice.processedSignals[m.id] = true;
+  if (!State.voice || !db) return;
+  const ref = db.ref('signals/'+State.voice.channelKey+'/'+State.me.id);
+  let snap;
+  try{ snap = await ref.once('value'); }catch(e){ return; }
+  const val = snap.val();
+  if (!val) return;
+  const entries = Object.entries(val); // [[pushKey, msg], ...]
+  for (const [pushKey, m] of entries){
+    ref.child(pushKey).remove(); // потребили сообщение — убираем именно его, без гонок с новыми
     try{
       if (m.type === 'offer'){
         if (!State.voice.peers[m.from]) connectToPeer(m.from, false);
@@ -1249,9 +1335,7 @@ async function leaveVoice(){
   Object.keys(v.peers).forEach(closePeer);
   v.localStream.getTracks().forEach(t=>t.stop());
   if (v.screenStream) v.screenStream.getTracks().forEach(t=>t.stop());
-  const pres = await sget('voice:'+v.channelKey, true) || {};
-  delete pres[State.me.id];
-  await sset('voice:'+v.channelKey, pres, true);
+  if (db){ try{ await db.ref('voicePresence/'+v.channelKey+'/'+State.me.id).remove(); }catch(e){} }
   State.voice = null;
   const overlay = document.getElementById('call-overlay');
   if (overlay) overlay.remove();
