@@ -238,6 +238,11 @@ img{-webkit-user-drag:none;}
 }
 .voice-tile.speaking{outline:2.5px solid var(--green);}
 .voice-tile video{width:100%; height:100%; object-fit:cover; position:absolute; inset:0;}
+.voice-tile .tile-avatar{
+  width:80px; height:80px; border-radius:50%; background:var(--bg-input); display:flex; align-items:center; justify-content:center;
+  font-size:34px; overflow:hidden;
+}
+.voice-tile .tile-avatar img{width:100%; height:100%; object-fit:cover;}
 .voice-tile .name-tag{position:absolute; left:8px; bottom:8px; background:#000000aa; padding:2px 8px; border-radius:5px; font-size:12px; color:#fff; display:flex; align-items:center; gap:5px;}
 .voice-controls{display:flex; gap:12px;}
 .voice-controls .vc-btn{
@@ -1203,7 +1208,7 @@ async function refreshVoiceParticipants(){
 function connectToPeer(peerId, initiator){
   if (!State.voice || State.voice.peers[peerId]) return;
   const pc = new RTCPeerConnection({iceServers: ICE_SERVERS});
-  const entry = {pc, streams:{}, negotiating:false};
+  const entry = {pc, negotiating:false, remoteStream: new MediaStream()};
   State.voice.peers[peerId] = entry;
   State.voice.localStream.getTracks().forEach(t => pc.addTrack(t, State.voice.localStream));
   if (State.voice.screenStream){
@@ -1211,9 +1216,16 @@ function connectToPeer(peerId, initiator){
   }
   pc.onicecandidate = e => { if (e.candidate) sendSignal(peerId, {type:'candidate', data:e.candidate}); };
   pc.ontrack = e => {
-    entry.streams[e.track.kind + (e.track.label||'')] = e.streams[0];
-    entry.remoteStream = e.streams[0];
-    entry.hasVideo = e.track.kind === 'video' || entry.hasVideo;
+    // Аудио и видео от собеседника приходят как отдельные треки —
+    // складываем их в один постоянный MediaStream, а не заменяем его целиком,
+    // иначе видео "затирает" звук и наоборот.
+    if (!entry.remoteStream.getTracks().includes(e.track)){
+      entry.remoteStream.addTrack(e.track);
+    }
+    e.track.addEventListener('ended', ()=>{
+      try{ entry.remoteStream.removeTrack(e.track); }catch(err){}
+      renderVoiceGrid();
+    });
     renderVoiceGrid();
   };
   pc.onconnectionstatechange = ()=>{
@@ -1275,46 +1287,66 @@ async function pollSignals(){
   }
 }
 
-function renderVoiceGrid(pres){
+function voiceTileEl(tileId){
+  const div = document.createElement('div');
+  div.className = 'voice-tile';
+  div.dataset.tileId = tileId;
+  div.innerHTML = `
+    <div class="tile-avatar"></div>
+    <video autoplay playsinline style="display:none;"></video>
+    <audio autoplay style="display:none;"></audio>
+    <div class="name-tag"></div>
+  `;
+  return div;
+}
+function updateVoiceTile(grid, tileId, prof, isMe, muted, remoteStream, localScreenStream){
+  let tile = grid.querySelector(`[data-tile-id="${tileId}"]`);
+  if (!tile){ tile = voiceTileEl(tileId); grid.appendChild(tile); }
+  const videoEl = tile.querySelector('video');
+  const audioEl = tile.querySelector('audio');
+  const avatarEl = tile.querySelector('.tile-avatar');
+  const nameTag = tile.querySelector('.name-tag');
+
+  const videoSource = isMe ? localScreenStream : remoteStream;
+  const hasVideo = !!(videoSource && videoSource.getVideoTracks && videoSource.getVideoTracks().length);
+
+  if (hasVideo){
+    if (videoEl.srcObject !== videoSource) videoEl.srcObject = videoSource;
+    videoEl.muted = isMe; // не слышим эхо собственного превью
+    videoEl.style.display = 'block';
+    avatarEl.style.display = 'none';
+  } else {
+    if (videoEl.srcObject) videoEl.srcObject = null;
+    videoEl.style.display = 'none';
+    avatarEl.style.display = 'flex';
+    avatarEl.innerHTML = (prof.avatar && prof.avatar.type === 'image' && prof.avatar.value)
+      ? `<img src="${prof.avatar.value}" alt="">`
+      : ((prof.avatar && prof.avatar.value) || '🙂');
+  }
+
+  if (!isMe && remoteStream && remoteStream.getAudioTracks && remoteStream.getAudioTracks().length){
+    if (audioEl.srcObject !== remoteStream) audioEl.srcObject = remoteStream;
+  } else if (audioEl.srcObject){
+    audioEl.srcObject = null;
+  }
+
+  nameTag.textContent = (muted?'🔇 ':'🎤 ') + (prof.nickname||'…') + (isMe?' (вы)':'');
+}
+function renderVoiceGrid(){
   const grid = document.getElementById('voice-grid');
   if (!grid || !State.voice) return;
-  let html = '';
-  html += voiceTileHTML(State.me, true, State.voice.muted, null, State.voice.screenStream);
-  for (const pid of Object.keys(State.voice.peers)){
-    const entry = State.voice.peers[pid];
-    const prof = State.peerCache[pid] || {nickname:'…', avatar:{type:'emoji',value:'🙂'}};
-    html += voiceTileHTML(prof, false, false, entry.remoteStream, null);
-  }
-  grid.innerHTML = html;
-  // attach media streams to newly created media elements
-  document.querySelectorAll('#voice-grid video[data-stream="local-screen"]').forEach(v=>{ if (State.voice.screenStream) v.srcObject = State.voice.screenStream; });
+  const wantedIds = ['__me__', ...Object.keys(State.voice.peers)];
+  Array.from(grid.children).forEach(child=>{
+    const tid = child.dataset.tileId;
+    if (tid && !wantedIds.includes(tid)) child.remove();
+  });
+  updateVoiceTile(grid, '__me__', State.me, true, State.voice.muted, null, State.voice.screenStream);
   Object.keys(State.voice.peers).forEach(pid=>{
     const entry = State.voice.peers[pid];
-    const v = document.querySelector('#voice-grid video[data-peer="'+pid+'"]');
-    const a = document.querySelector('#voice-grid audio[data-peer="'+pid+'"]');
-    if (entry.remoteStream){
-      if (v) v.srcObject = entry.remoteStream;
-      if (a) a.srcObject = entry.remoteStream;
-    }
+    const prof = State.peerCache[pid] || {id:pid, nickname:'…', avatar:{type:'emoji',value:'🙂'}};
+    updateVoiceTile(grid, pid, prof, false, false, entry.remoteStream, null);
+    if (!State.peerCache[pid]) getProfile(pid).then(()=>renderVoiceGrid());
   });
-  Object.keys(State.peerCache).length; // noop
-  Object.keys(State.voice.peers).forEach(pid=>{ if (!State.peerCache[pid]) getProfile(pid).then(()=>renderVoiceGrid()); });
-}
-function voiceTileHTML(prof, isMe, muted, remoteStream, localScreenStream){
-  const av = avatarHTML(prof.avatar, 'lg');
-  const hasVideo = remoteStream && remoteStream.getVideoTracks && remoteStream.getVideoTracks().length;
-  let media = '';
-  if (isMe && localScreenStream){
-    media = `<video data-stream="local-screen" autoplay muted playsinline></video>`;
-  } else if (!isMe && hasVideo){
-    media = `<video data-peer="__PID__" autoplay playsinline></video><audio data-peer="__PID__" autoplay></audio>`;
-  } else if (!isMe && remoteStream){
-    media = `<audio data-peer="__PID__" autoplay></audio>`;
-  }
-  return `<div class="voice-tile">
-    ${media || av}
-    <div class="name-tag">${muted?'🔇':'🎤'} ${esc(prof.nickname)}${isMe?' (вы)':''}</div>
-  </div>`.replace(/__PID__/g, prof.id||'');
 }
 
 async function toggleMic(){
