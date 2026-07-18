@@ -1282,6 +1282,68 @@ async function voicePresenceGetAll(channelKey){
   catch(e){ console.error('voice presence read failed', e); return {}; }
 }
 
+/* Раньше сигналы (offer/answer/ICE) и presence опрашивались раз в 1-2 секунды
+   через setInterval + once('value'). Проблема: браузер агрессивно тормозит
+   setInterval у фоновых вкладок (а собеседник почти всегда сворачивает вкладку
+   или переключается в другое окно во время созвона/шаринга экрана) — из-за
+   этого обмен offer/answer/ICE зависал на много секунд ("стрим зависает"),
+   а presence-запись собеседника считалась "протухшей" и живое соединение
+   рвалось принудительно ("звук пропадает через время"). Чинится переходом на
+   realtime-подписки (on/child_added), которые доставляются по вебсокету сразу,
+   а не по таймеру, плюс решение о разрыве связи теперь принимает сам
+   RTCPeerConnection (onconnectionstatechange), а не факт исчезновения
+   presence-записи (она может мигать даже при кратких обрывах связи с Firebase). */
+function attachSignalListener(channelKey){
+  const ref = db.ref('signals/'+channelKey+'/'+State.me.id);
+  const handler = async (snap)=>{
+    const m = snap.val();
+    ref.child(snap.key).remove(); // потребили сообщение — убираем именно его, без гонок с новыми
+    if (!State.voice || !m) return;
+    try{
+      if (m.type === 'offer' || m.type === 'answer'){
+        if (!State.voice.peers[m.from]) connectToPeer(m.from, false);
+        const entry = State.voice.peers[m.from];
+        const pc = entry.pc;
+        const isOffer = m.data.type === 'offer';
+        const offerCollision = isOffer && (entry.makingOffer || pc.signalingState !== 'stable');
+        entry.ignoreOffer = !entry.polite && offerCollision;
+        if (entry.ignoreOffer) return;
+        await pc.setRemoteDescription(new RTCSessionDescription(m.data));
+        if (isOffer){
+          await pc.setLocalDescription();
+          sendSignal(m.from, {type: pc.localDescription.type, data:{type:pc.localDescription.type, sdp:pc.localDescription.sdp}});
+        }
+      } else if (m.type === 'candidate'){
+        const entry = State.voice.peers[m.from];
+        if (entry){
+          try{ await entry.pc.addIceCandidate(new RTCIceCandidate(m.data)); }
+          catch(err){ if (!entry.ignoreOffer) console.error('addIceCandidate failed', err); }
+        }
+      } else if (m.type === 'bye'){
+        closePeer(m.from);
+        renderVoiceGrid();
+      }
+    }catch(err){ console.error('signal handling error', err); }
+  };
+  ref.on('child_added', handler);
+  return {ref, handler};
+}
+
+// Когда вкладка возвращается из фона, сразу форсируем presence и подключения,
+// не дожидаясь заторможенных браузером таймеров.
+document.addEventListener('visibilitychange', ()=>{
+  if (!document.hidden && State.voice && db){
+    db.ref('voicePresence/'+State.voice.channelKey+'/'+State.me.id)
+      .update({at: now(), muted: State.voice.muted, sharing: State.voice.sharing}).catch(()=>{});
+    refreshVoiceParticipants();
+    Object.values(State.voice.peers).forEach(entry=>{
+      if (entry.pc.connectionState === 'disconnected' || entry.pc.connectionState === 'failed'){
+        try{ entry.pc.restartIce(); }catch(e){}
+      }
+    });
+  }
+});
+
 async function joinVoice(channelKey, autoView){
   if (State.voice && State.voice.channelKey === channelKey) return;
   if (State.voice) await leaveVoice();
@@ -1295,43 +1357,50 @@ async function joinVoice(channelKey, autoView){
   State.voice = {
     channelKey, localStream, screenStream:null, muted:false, sharing:false,
     peers: {}, autoView,
-    presenceTimer:null, signalTimer:null
+    presenceTimer:null, signalListener:null, presenceListener:null
   };
   const myPresenceRef = db.ref('voicePresence/'+channelKey+'/'+State.me.id);
   await myPresenceRef.set({at: now(), muted:false, sharing:false, nickname: State.me.nickname});
-  myPresenceRef.onDisconnect().remove(); // авточистка, если вкладка закроется/сеть оборвётся
+  myPresenceRef.onDisconnect().remove(); // авточистка, если вкладка реально закроется/крашнется
 
-  const presence = await voicePresenceGetAll(channelKey);
-  Object.keys(presence).forEach(pid=>{
-    if (pid !== State.me.id && (now() - presence[pid].at) < 20000){
+  // Сигналинг — в реальном времени, а не раз в секунду (см. комментарий выше).
+  State.voice.signalListener = attachSignalListener(channelKey);
+
+  // Presence нужен только чтобы ОБНАРУЖИТЬ нового собеседника в канале — сам
+  // разрыв соединения решается через RTCPeerConnection.onconnectionstatechange.
+  const presenceRef = db.ref('voicePresence/'+channelKey);
+  const presenceHandler = (snap)=>{
+    const pid = snap.key;
+    if (State.voice && pid !== State.me.id && !State.voice.peers[pid]){
       connectToPeer(pid, State.me.id < pid);
     }
-  });
+  };
+  presenceRef.on('child_added', presenceHandler);
+  State.voice.presenceListener = {ref: presenceRef, handler: presenceHandler};
 
   State.voice.presenceTimer = setInterval(async ()=>{
     if (!State.voice) return;
-    await myPresenceRef.update({at: now(), muted: State.voice.muted, sharing: State.voice.sharing});
+    try{ await myPresenceRef.update({at: now(), muted: State.voice.muted, sharing: State.voice.sharing}); }
+    catch(e){}
   }, 5000);
-  State.voice.signalTimer = setInterval(pollSignals, 1000);
   refreshVoiceParticipants();
   renderMain();
 }
 
 async function refreshVoiceParticipants(){
+  // Подстраховка на случай гонки при подписке (например если событие
+  // child_added от presence пришло на долю секунды раньше, чем мы успели
+  // подписаться) — сама не закрывает ничьи соединения, только досоздаёт
+  // недостающие. Разрыв связи с ушедшим собеседником обрабатывается через
+  // сигнал 'bye' (leaveVoice) и через RTCPeerConnection.onconnectionstatechange.
   if (!State.voice) return;
   const pres = await voicePresenceGetAll(State.voice.channelKey);
-  const activeIds = Object.keys(pres).filter(id => (now()-pres[id].at) < 20000);
-  for (const pid of activeIds){
+  Object.keys(pres).forEach(pid=>{
     if (pid !== State.me.id && !State.voice.peers[pid]){
       connectToPeer(pid, State.me.id < pid);
     }
-  }
-  for (const pid of Object.keys(State.voice.peers)){
-    if (!activeIds.includes(pid)){
-      closePeer(pid);
-    }
-  }
-  renderVoiceGrid(pres);
+  });
+  renderVoiceGrid();
 }
 
 function connectToPeer(peerId, initiator){
@@ -1341,7 +1410,8 @@ function connectToPeer(peerId, initiator){
     pc, remoteStream: new MediaStream(),
     polite: !initiator,   // "вежливая" сторона уступает при коллизии offer'ов
     makingOffer: false,
-    ignoreOffer: false
+    ignoreOffer: false,
+    giveUpTimer: null     // таймер на случай, если реконнект не поможет (см. onconnectionstatechange)
   };
   State.voice.peers[peerId] = entry;
   State.voice.localStream.getTracks().forEach(t => pc.addTrack(t, State.voice.localStream));
@@ -1363,9 +1433,33 @@ function connectToPeer(peerId, initiator){
     renderVoiceGrid();
   };
   pc.onconnectionstatechange = ()=>{
-    console.log('[larpingnost] соединение с', peerId, '→', pc.connectionState);
-    if (pc.connectionState === 'failed'){
-      toast('Не удалось установить голосовое соединение с собеседником (проблема сети/NAT)', 'err');
+    const state = pc.connectionState;
+    console.log('[larpingnost] соединение с', peerId, '→', state);
+    if (state === 'connected'){
+      // Реально восстановились — снимаем таймер, который иначе закрыл бы соединение
+      clearTimeout(entry.giveUpTimer); entry.giveUpTimer = null;
+      return;
+    }
+    if (state === 'disconnected' || state === 'failed'){
+      // "disconnected" — это ЧАСТО временный сбой (свернутая вкладка, сон
+      // ноутбука, моргнувший wifi), а не конец звонка: WebRTC умеет сам
+      // восстановиться за несколько секунд. Раньше здесь ничего не делалось
+      // при "disconnected", и обрыв чинился только принудительным закрытием
+      // соединения через presence-таймаут — из-за этого звук пропадал
+      // насовсем при любой кратковременной сетевой заминке. Теперь пробуем
+      // ICE-рестарт и даём соединению время восстановиться самому, и закрываем
+      // его только если это не помогло.
+      try{ pc.restartIce(); }catch(err){ console.error('restartIce failed', err); }
+      if (!entry.giveUpTimer){
+        entry.giveUpTimer = setTimeout(()=>{
+          if (!State.voice || !State.voice.peers[peerId]) return;
+          if (pc.connectionState !== 'connected'){
+            toast('Голосовое соединение потеряно (проблема сети/NAT)', 'err');
+            closePeer(peerId);
+            renderVoiceGrid();
+          }
+        }, 15000);
+      }
     }
   };
   pc.onnegotiationneeded = async ()=>{
@@ -1380,7 +1474,11 @@ function connectToPeer(peerId, initiator){
 function closePeer(peerId){
   if (!State.voice) return;
   const entry = State.voice.peers[peerId];
-  if (entry){ try{ entry.pc.close(); }catch(e){} delete State.voice.peers[peerId]; }
+  if (entry){
+    clearTimeout(entry.giveUpTimer);
+    try{ entry.pc.close(); }catch(e){}
+    delete State.voice.peers[peerId];
+  }
 }
 
 async function sendSignal(toId, msg){
@@ -1389,41 +1487,6 @@ async function sendSignal(toId, msg){
   try{ await db.ref('signals/'+State.voice.channelKey+'/'+toId).push(msg); }
   catch(e){ console.error('sendSignal failed', e); }
 }
-async function pollSignals(){
-  if (!State.voice || !db) return;
-  const ref = db.ref('signals/'+State.voice.channelKey+'/'+State.me.id);
-  let snap;
-  try{ snap = await ref.once('value'); }catch(e){ return; }
-  const val = snap.val();
-  if (!val) return;
-  const entries = Object.entries(val); // [[pushKey, msg], ...]
-  for (const [pushKey, m] of entries){
-    ref.child(pushKey).remove(); // потребили сообщение — убираем именно его, без гонок с новыми
-    try{
-      if (m.type === 'offer' || m.type === 'answer'){
-        if (!State.voice.peers[m.from]) connectToPeer(m.from, false);
-        const entry = State.voice.peers[m.from];
-        const pc = entry.pc;
-        const isOffer = m.data.type === 'offer';
-        const offerCollision = isOffer && (entry.makingOffer || pc.signalingState !== 'stable');
-        entry.ignoreOffer = !entry.polite && offerCollision;
-        if (entry.ignoreOffer) continue;
-        await pc.setRemoteDescription(new RTCSessionDescription(m.data));
-        if (isOffer){
-          await pc.setLocalDescription();
-          sendSignal(m.from, {type: pc.localDescription.type, data:{type:pc.localDescription.type, sdp:pc.localDescription.sdp}});
-        }
-      } else if (m.type === 'candidate'){
-        const entry = State.voice.peers[m.from];
-        if (entry){
-          try{ await entry.pc.addIceCandidate(new RTCIceCandidate(m.data)); }
-          catch(err){ if (!entry.ignoreOffer) console.error('addIceCandidate failed', err); }
-        }
-      }
-    }catch(err){ console.error('signal handling error', err); }
-  }
-}
-
 function voiceTileEl(tileId){
   const div = document.createElement('div');
   div.className = 'voice-tile';
@@ -1528,7 +1591,11 @@ async function leaveVoice(){
   if (!State.voice) return;
   const v = State.voice;
   clearInterval(v.presenceTimer);
-  clearInterval(v.signalTimer);
+  if (v.signalListener) try{ v.signalListener.ref.off('child_added', v.signalListener.handler); }catch(e){}
+  if (v.presenceListener) try{ v.presenceListener.ref.off('child_added', v.presenceListener.handler); }catch(e){}
+  // Явно говорим собеседникам, что уходим — так их сторона закрывает
+  // соединение сразу, а не ждёт, пока presence протухнет.
+  Object.keys(v.peers).forEach(pid=>{ sendSignal(pid, {type:'bye', data:null}); });
   Object.keys(v.peers).forEach(closePeer);
   v.localStream.getTracks().forEach(t=>t.stop());
   if (v.screenStream) v.screenStream.getTracks().forEach(t=>t.stop());
