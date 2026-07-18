@@ -386,18 +386,31 @@ if (FIREBASE_CONFIGURED){
   }catch(e){ console.error('firebase init failed', e); }
 }
 
+let _lastDbErrToast = 0;
+function dbErrToast(msg){
+  const t = now();
+  if (t - _lastDbErrToast > 8000){ _lastDbErrToast = t; toast(msg, 'err'); }
+}
 async function sget(key){
   if (!db) return null;
   try{
     const snap = await db.ref(key).once('value');
     const v = snap.val();
     return v ? JSON.parse(v) : null;
-  }catch(e){ console.error('db get failed', key, e); return null; }
+  }catch(e){
+    console.error('db get failed', key, e);
+    dbErrToast('Ошибка чтения базы данных: ' + e.message);
+    return null;
+  }
 }
 async function sset(key, value){
   if (!db) return null;
   try{ await db.ref(key).set(JSON.stringify(value)); return true; }
-  catch(e){ console.error('db set failed', key, e); return null; }
+  catch(e){
+    console.error('db set failed', key, e);
+    dbErrToast('Ошибка записи в базу данных: ' + e.message);
+    return null;
+  }
 }
 
 /* Личность привязана к браузеру/устройству (localStorage), а не к Firebase —
@@ -1056,8 +1069,21 @@ async function openQuickEmojiPicker(input){
   document.body.appendChild(overlay);
 }
 
-/* ================= VOICE / CALLS (WebRTC) ================= */
-const ICE_SERVERS = [{urls:'stun:stun.l.google.com:19302'}, {urls:'stun:stun1.l.google.com:19302'}];
+/* ================= VOICE / CALLS (WebRTC) =================
+   STUN сам по себе часто не пробивает соединение, если оба собеседника
+   сидят за обычными домашними роутерами — тогда нужен TURN-сервер,
+   который ретранслирует трафик. Ниже — бесплатный публичный TURN
+   (Open Relay Project). Он общий и не гарантирует SLA/скорость, но
+   для игр с друзьями обычно достаточно. Для более надёжной картинки
+   можно завести свой бесплатный TURN на metered.ca/turn-server и
+   заменить значения ниже на свои. */
+const ICE_SERVERS = [
+  {urls:'stun:stun.l.google.com:19302'},
+  {urls:'stun:stun1.l.google.com:19302'},
+  {urls:'turn:openrelay.metered.ca:80', username:'openrelayproject', credential:'openrelayproject'},
+  {urls:'turn:openrelay.metered.ca:443', username:'openrelayproject', credential:'openrelayproject'},
+  {urls:'turn:openrelay.metered.ca:443?transport=tcp', username:'openrelayproject', credential:'openrelayproject'}
+];
 
 function voiceMainHtml(server, channel){
   const key = server.id+':'+channel.id;
@@ -1191,9 +1217,11 @@ function connectToPeer(peerId, initiator){
     renderVoiceGrid();
   };
   pc.onconnectionstatechange = ()=>{
-    if (['failed','disconnected','closed'].includes(pc.connectionState)){
-      // leave cleanup handled by presence loop
+    console.log('[larpingnost] соединение с', peerId, '→', pc.connectionState);
+    if (pc.connectionState === 'failed'){
+      toast('Не удалось установить голосовое соединение с собеседником (проблема сети/NAT)', 'err');
     }
+    // leave cleanup handled by presence loop
   };
   pc.onnegotiationneeded = async ()=>{
     if (entry.negotiating) return;
